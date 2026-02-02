@@ -3,13 +3,38 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp">
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Loading Rust..."
-        android:textSize="24sp" />
+        android:text="P2P Messenger"
+        android:textSize="24sp"
+        android:layout_marginBottom="24dp"/>
+
+    <EditText
+        android:id="@+id/editTarget"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Target IP:Port (e.g. 192.168.1.5:8080)"
+        android:inputType="text"
+        android:text="10.0.2.2:8080" />
+
+    <EditText
+        android:id="@+id/editMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Message"
+        android:inputType="text"
+        android:layout_marginTop="16dp"/>
+
+    <Button
+        android:id="@+id/btnSend"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send Message"
+        android:layout_marginTop="24dp"/>
 
 </LinearLayout>
