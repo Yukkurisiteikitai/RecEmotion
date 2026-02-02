@@ -4,7 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "recemotion-cli"
+path = "src/main.rs"
 
 [dependencies]
 jni = "0.21"
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] } # CLI server might still use tokio
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
