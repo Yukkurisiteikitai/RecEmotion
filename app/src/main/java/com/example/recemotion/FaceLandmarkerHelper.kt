@@ -1,3 +1,4 @@
+
 package com.example.recemotion
 
 import android.content.Context
@@ -31,7 +32,7 @@ class FaceLandmarkerHelper(
             .setBaseOptions(baseOptions)
             .setMinFaceDetectionConfidence(0.5f)
             .setMinFacePresenceConfidence(0.5f)
-            .setOutputFaceBlendshapes(true) // Crucial for emotion output
+            .setOutputFaceBlendshapes(true) // Keep it for debug possibilities
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener(this::returnLivestreamResult)
             .setErrorListener(this::returnLivestreamError)
@@ -55,8 +56,6 @@ class FaceLandmarkerHelper(
         val frameTime = SystemClock.uptimeMillis()
         
         // Convert ImageProxy to MPImage
-        // Note: For optimal performance, we should use ByteBuffer or MediaImage,
-        // but Bitmap conversion is often easier to handle rotation correctly in basic setups.
         val bitmap = imageProxy.toBitmap()
         
         val mpImage = BitmapImageBuilder(bitmap).build()
@@ -77,7 +76,8 @@ class FaceLandmarkerHelper(
         val finishTimeMs = SystemClock.uptimeMillis()
         val inferenceTime = finishTimeMs - result.timestampMs()
 
-        if (result.faceBlendshapes().isPresent && result.faceBlendshapes().get().isNotEmpty()) {
+        // UDPATE: Check for Landmarks, not just Blendshapes
+        if (result.faceLandmarks().isNotEmpty()) {
              faceLandmarkerHelperListener?.onResults(result, inferenceTime)
         } else {
              faceLandmarkerHelperListener?.onEmpty()

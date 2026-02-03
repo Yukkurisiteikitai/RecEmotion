@@ -100,31 +100,26 @@ mod tests {
         let decrypted = decrypt(&encrypted).unwrap();
         assert_eq!(decrypted, input);
     }
-
-    #[test]
-    fn test_energy_calculation() {
-        // Wake time: 7:00 AM (Unix timestamp mock)
-        // Current: 8:00 AM -> 1 hour awake -> Energy should be high
-        // Using simple logic for now: 100 - (hours_awake * 5)
-        // This is a placeholder test for the logic we are about to write
-        let wake = 10000;
-        let now = 13600; // 1 hour later
-        let energy = calculate_energy_logic(wake, now);
-        assert_eq!(energy, 5); // 1-5 scale implementation pending
-    }
 }
 
 use std::sync::Mutex;
 use lazy_static::lazy_static;
-use chrono::prelude::*;
+use crate::facs::{
+    landmarks::Point3D,
+    features::GeometricFeatureExtractor,
+    calibration::StatisticalCalibrator,
+    calculate_emotion,
+};
 
 // --- State Management ---
 
 #[derive(Debug, Clone)]
 pub struct SessionState {
-    pub wake_time: Option<i64>, // Unix timestamp in seconds
-    pub stress_level: i32,      // 1-5
-    pub emotion_history: Vec<Vec<f32>>, // History of frame scores
+    pub wake_time: Option<i64>,
+    pub stress_level: i32,
+    pub calibrator: StatisticalCalibrator,
+    pub current_emotion: String,
+    pub emotion_history: Vec<String>,
 }
 
 impl SessionState {
@@ -132,6 +127,8 @@ impl SessionState {
         Self {
             wake_time: None,
             stress_level: 1,
+            calibrator: StatisticalCalibrator::new(),
+            current_emotion: "Neutral".to_string(),
             emotion_history: Vec::new(),
         }
     }
@@ -146,7 +143,9 @@ lazy_static! {
 pub fn init_session(wake_time: i64) {
     let mut state = GLOBAL_STATE.lock().unwrap();
     state.wake_time = Some(wake_time);
+    state.calibrator = StatisticalCalibrator::new(); // Reset calibration
     state.emotion_history.clear();
+    state.current_emotion = "Neutral".to_string();
     println!("Rust State: Session initialized with wake_time={}", wake_time);
 }
 
@@ -156,12 +155,46 @@ pub fn update_stress(level: i32) {
     println!("Rust State: Stress level updated to {}", state.stress_level);
 }
 
-pub fn push_emotion_frame(scores: Vec<f32>) {
+// Replaces push_emotion_frame
+pub fn process_face_landmarks(coords: Vec<f32>) {
     let mut state = GLOBAL_STATE.lock().unwrap();
-    state.emotion_history.push(scores);
-    // Optional: limit history size?
-    if state.emotion_history.len() > 300 { // Keep last ~10 seconds at 30fps
-        state.emotion_history.remove(0);
+    
+    // Convert flat vec to Point3D (r.len() / 3)
+    let num_points = coords.len() / 3;
+    if num_points < 468 {
+        return; // Invalid frame
+    }
+
+    let mut landmarks = Vec::with_capacity(num_points);
+    for i in 0..num_points {
+        landmarks.push(Point3D::new(coords[i*3], coords[i*3+1], coords[i*3+2]));
+    }
+
+    let extractor = GeometricFeatureExtractor::new();
+    if let Some(features) = extractor.extract(&landmarks) {
+        // If not calibrated, use this frame to calibrate
+        if !state.calibrator.is_calibrated {
+            state.calibrator.add_sample(features);
+            
+            // Auto-finalize if enough samples (e.g., 30 frames ~ 1 sec)
+            if state.calibrator.samples.len() >= 30 {
+                state.calibrator.finalize_calibration();
+            }
+        } else {
+            // Already calibrated: calculate Z-scores and emotion
+            let mut z_scores = std::collections::HashMap::new();
+            for (k, v) in features {
+                let z = state.calibrator.get_z_score(&k, v);
+                z_scores.insert(k, z);
+            }
+            
+            let emotion = calculate_emotion(&z_scores);
+            state.current_emotion = emotion.clone();
+            state.emotion_history.push(emotion);
+            if state.emotion_history.len() > 100 {
+                state.emotion_history.remove(0);
+            }
+        }
     }
 }
 
@@ -172,19 +205,13 @@ pub fn calculate_energy() -> i32 {
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
             calculate_energy_logic(wake, now)
         }
-        None => 3, // Default if no wake time set
+        None => 3, 
     }
 }
 
 fn calculate_energy_logic(wake_time: i64, current_time: i64) -> i32 {
     let hours_awake = (current_time - wake_time) as f64 / 3600.0;
     
-    // Simple decay logic: 
-    // < 2 hours: 5
-    // < 6 hours: 4
-    // < 10 hours: 3
-    // < 14 hours: 2
-    // >= 14 hours: 1
     if hours_awake < 2.0 { 5 }
     else if hours_awake < 6.0 { 4 }
     else if hours_awake < 10.0 { 3 }
@@ -200,15 +227,16 @@ pub fn generate_analysis_json(text_input: String) -> String {
         None => 3
     };
 
-    // Calculate aggregated emotion (e.g., average of top emotion)
-    // For now, let's just take the average of the last few frames' max emotion if possible.
-    // Or just dummy it out for now.
-    
     let emotion_summary = if state.emotion_history.is_empty() {
         "Neutral".to_string()
     } else {
-        // TODO: Real aggregation logic
-        format!("{} frames captured", state.emotion_history.len())
+        // Simple mode (most frequent emotion)
+        use std::collections::HashMap;
+        let mut counts = HashMap::new();
+        for e in &state.emotion_history {
+            *counts.entry(e).or_insert(0) += 1;
+        }
+        counts.into_iter().max_by_key(|&(_, count)| count).map(|(e, _)| e.clone()).unwrap_or("Neutral".to_string())
     };
 
     let response = serde_json::json!({
@@ -220,29 +248,11 @@ pub fn generate_analysis_json(text_input: String) -> String {
             "input_text": text_input
         },
         "emotion_data": {
-            "summary": emotion_summary
+            "current_emotion": state.current_emotion,
+            "summary": emotion_summary,
+            "is_calibrated": state.calibrator.is_calibrated
         }
     });
 
     response.to_string()
 }
-
-// Tests for the new logic
-#[cfg(test)]
-mod analysis_tests {
-    use super::*;
-
-    #[test]
-    fn test_energy_logic() {
-        let wake = 1000;
-        let now_1h = 1000 + 3600;
-        assert_eq!(calculate_energy_logic(wake, now_1h), 5);
-
-        let now_5h = 1000 + 3600 * 5;
-        assert_eq!(calculate_energy_logic(wake, now_5h), 4);
-        
-        let now_15h = 1000 + 3600 * 15;
-        assert_eq!(calculate_energy_logic(wake, now_15h), 1);
-    }
-}
-

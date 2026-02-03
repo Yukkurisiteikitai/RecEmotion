@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         }
         
         binding.textView.text = "Initializing..."
+
+        // Initialize Rust Session (mock wake time)
+        initSession(System.currentTimeMillis() / 1000 - 3600)
     }
 
     private fun startCamera() {
@@ -92,21 +95,29 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
     }
 
     override fun onResults(result: FaceLandmarkerResult, inferenceTime: Long) {
-        result.faceBlendshapes().ifPresent { blendshapes ->
-            // blendshapes is a list of lists (one list per face)
-            if (blendshapes.isNotEmpty()) {
-                val firstFace = blendshapes[0] // Categories for the first face
-                // Example: Find "jawOpen" or generic printing
-                // Let's print the top 3 highest scores for debugging
-                val sorted = firstFace.sortedByDescending { it.score() }.take(3)
-                
-                val logMsg = sorted.joinToString { "${it.displayNameOrIndex()}:${String.format("%.2f", it.score())}" }
-                
-                Log.d(TAG, "Face 0 Blendshapes Top 3: $logMsg")
-                
-                runOnUiThread {
-                    binding.textView.text = "Inference: ${inferenceTime}ms\n$logMsg"
-                }
+        // Updated to use Landmarkers instead of Blendshapes
+        if (result.faceLandmarks().isNotEmpty()) {
+            val firstFaceLandmarks = result.faceLandmarks()[0]
+            
+            // Flatten the landmarks (x, y, z) into a FloatArray
+            // 468 or 478 points
+            val flattened = FloatArray(firstFaceLandmarks.size * 3)
+            for (i in firstFaceLandmarks.indices) {
+                val point = firstFaceLandmarks[i]
+                flattened[i * 3] = point.x()
+                flattened[i * 3 + 1] = point.y()
+                flattened[i * 3 + 2] = point.z()
+            }
+
+            // Send to Rust JNI
+            pushFaceLandmarks(flattened)
+            
+            // Get current analysis status (optional polling or just assume it updates)
+            // For now, let's just update UI to show we are alive
+            val json = getAnalysisJson("")
+
+            runOnUiThread {
+                binding.textView.text = "Inference: ${inferenceTime}ms\nState: $json"
             }
         }
     }
@@ -139,8 +150,9 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         @JvmStatic
         external fun initSession(wakeTime: Long)
 
+        // Updated Function Signature
         @JvmStatic
-        external fun pushEmotionFrame(scores: FloatArray)
+        external fun pushFaceLandmarks(landmarks: FloatArray)
 
         @JvmStatic
         external fun getAnalysisJson(text: String): String
