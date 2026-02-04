@@ -1,108 +1,7 @@
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Message {
-    pub sender: String,
-    pub content: Vec<u8>, // Encrypted content
-    pub timestamp: u64,
-}
-
-/// Mock encryption function.
-pub fn encrypt(data: &[u8], _key: &[u8]) -> Result<Vec<u8>> {
-    let mut output = Vec::new();
-    output.extend_from_slice(b"ENC:");
-    output.extend(data.iter().rev());
-    Ok(output)
-}
-
-/// Mock decryption function.
-pub fn decrypt(data: &[u8]) -> Result<Vec<u8>> {
-    if data.starts_with(b"ENC:") {
-        let content = &data[4..];
-        Ok(content.iter().rev().cloned().collect())
-    } else {
-        Ok(data.to_vec()) // Fallback for testing
-    }
-}
-
-/// Synchronously send a message to target.
-/// This blocks, so it must be run in a background thread on Android.
-pub fn send_message_sync(target: &str, sender: &str, content: &[u8]) -> Result<()> {
-    let mut stream = TcpStream::connect(target)
-        .with_context(|| format!("Failed to connect to {}", target))?;
-
-    let encrypted_content = encrypt(content, &[])?;
-    
-    let msg = Message {
-        sender: sender.to_string(),
-        content: encrypted_content,
-        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-    };
-
-    let encoded = bincode::serialize(&msg)?;
-    
-    // Protocol: Length (u32 BE) + Data
-    let len = encoded.len() as u32;
-    stream.write_all(&len.to_be_bytes())?;
-    stream.write_all(&encoded)?;
-
-    Ok(())
-}
-
-/// Synchronously start a server to receive messages.
-/// This blocks forever.
-pub fn start_server_sync(port: u16) -> Result<()> {
-    let listener = TcpListener::bind(("0.0.0.0", port))
-        .with_context(|| format!("Failed to bind to 0.0.0.0:{}", port))?;
-
-    println!("Server listening on 0.0.0.0:{}", port);
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                if let Err(e) = handle_client(&mut stream) {
-                    eprintln!("Error handling client: {}", e);
-                }
-            }
-            Err(e) => eprintln!("Connection failed: {}", e),
-        }
-    }
-    Ok(())
-}
-
-fn handle_client(stream: &mut TcpStream) -> Result<()> {
-    let mut len_buf = [0u8; 4];
-    stream.read_exact(&mut len_buf)?;
-    let len = u32::from_be_bytes(len_buf) as usize;
-
-    let mut buf = vec![0u8; len];
-    stream.read_exact(&mut buf)?;
-
-    let msg: Message = bincode::deserialize(&buf)?;
-    let decrypted = decrypt(&msg.content)?;
-    
-    println!("[{}] {}", msg.sender, String::from_utf8_lossy(&decrypted));
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_encrypt_decrypt() {
-        let input = b"hello";
-        let encrypted = encrypt(input, &[]).unwrap();
-        let decrypted = decrypt(&encrypted).unwrap();
-        assert_eq!(decrypted, input);
-    }
-}
+// P2P Networking code removed to focus on RecEmotion logic
 
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use lazy_static::lazy_static;
 use crate::facs::{
     landmarks::Point3D,
@@ -170,6 +69,12 @@ pub fn process_face_landmarks(coords: Vec<f32>) {
         landmarks.push(Point3D::new(coords[i*3], coords[i*3+1], coords[i*3+2]));
     }
 
+    // 1. Gating: Quality Control (Head Pose)
+    if !is_head_pose_valid(&landmarks) {
+        // println!("Rust: Frame skipped due to head pose");
+        return;
+    }
+
     let extractor = GeometricFeatureExtractor::new();
     if let Some(features) = extractor.extract(&landmarks) {
         // If not calibrated, use this frame to calibrate
@@ -179,6 +84,7 @@ pub fn process_face_landmarks(coords: Vec<f32>) {
             // Auto-finalize if enough samples (e.g., 30 frames ~ 1 sec)
             if state.calibrator.samples.len() >= 30 {
                 state.calibrator.finalize_calibration();
+                println!("Rust: Calibration finalized!");
             }
         } else {
             // Already calibrated: calculate Z-scores and emotion
@@ -196,6 +102,25 @@ pub fn process_face_landmarks(coords: Vec<f32>) {
             }
         }
     }
+}
+
+fn is_head_pose_valid(landmarks: &[Point3D]) -> bool {
+    // Simple Yaw Check: |LeftEye.z - RightEye.z| / IPD
+    // Indices: Left Eye Corner 33, Right Eye Corner 263
+    let left = &landmarks[33];
+    let right = &landmarks[263];
+    
+    let ipd = left.euclidean_dist(right);
+    if ipd < 0.1 { return false; } // Too far/small
+
+    let z_diff = (left.z - right.z).abs();
+    let yaw_ratio = z_diff / ipd;
+
+    // Threshold ~ 0.2 corresponds to roughly 15-20 degrees
+    if yaw_ratio > 0.25 {
+        return false;
+    }
+    true
 }
 
 pub fn calculate_energy() -> i32 {
@@ -239,8 +164,13 @@ pub fn generate_analysis_json(text_input: String) -> String {
         counts.into_iter().max_by_key(|&(_, count)| count).map(|(e, _)| e.clone()).unwrap_or("Neutral".to_string())
     };
 
+    // Calculate detailed breakdown for "Link to Past Learning"
+    // e.g., "Sadness: 20%, Anger: 5%"
+    // For now, just sending the summary.
+
     let response = serde_json::json!({
         "status": "success",
+        "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
         "context": {
             "energy_level": energy,
             "stress_level": state.stress_level,
@@ -249,8 +179,12 @@ pub fn generate_analysis_json(text_input: String) -> String {
         },
         "emotion_data": {
             "current_emotion": state.current_emotion,
-            "summary": emotion_summary,
-            "is_calibrated": state.calibrator.is_calibrated
+            "dominant_emotion_last_Session": emotion_summary,
+            "is_calibrated": state.calibrator.is_calibrated,
+            "sample_count": state.emotion_history.len()
+        },
+        "insight_hints": {
+            "has_discrepancy": state.current_emotion != "Neutral" && state.stress_level == 1 // Simple example logic
         }
     });
 

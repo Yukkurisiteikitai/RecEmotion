@@ -54,6 +54,7 @@ dependencies {
 
     // MediaPipe
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
     // CameraX
     val cameraxVersion = "1.3.1"
