@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "com.example.recemotion"
     compileSdk = 35
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "com.example.recemotion"
@@ -15,6 +16,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -32,6 +37,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
     sourceSets {
         getByName("main") {
@@ -53,8 +64,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // MediaPipe
-    implementation("com.google.mediapipe:tasks-vision:0.10.14")
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    val mediapipeVersion = "0.10.+"
+    implementation("com.google.mediapipe:tasks-vision:$mediapipeVersion")
+    implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
 
     // CameraX
     val cameraxVersion = "1.3.1"
@@ -62,6 +74,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
+
 }
 
 tasks.register<Exec>("cargoBuild") {
@@ -71,9 +84,15 @@ tasks.register<Exec>("cargoBuild") {
 
     workingDir = file("src/main/rust")
     environment("ANDROID_NDK_HOME", "/Users/yuuto/Library/Android/sdk/ndk/29.0.14206865")
-    commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-t", "x86_64-linux-android", "-o", "../jniLibs", "build", "--release")
+    commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-o", "../jniLibs", "build", "--release")
+}
+
+tasks.register<Copy>("copyCMakeLibs") {
+    from("app/build/intermediates/cmake/debug/obj/arm64-v8a")
+    into("app/src/main/jniLibs/arm64-v8a")
+    include("libllama_jni.so")
 }
 
 tasks.named("preBuild") {
-    dependsOn("cargoBuild")
+    dependsOn("cargoBuild", "copyCMakeLibs")  // 両方実行
 }

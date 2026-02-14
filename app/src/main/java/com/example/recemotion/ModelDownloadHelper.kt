@@ -1,6 +1,7 @@
 package com.example.recemotion
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,17 +14,64 @@ class ModelDownloadHelper(private val context: Context) {
 
     companion object {
         const val TAG = "ModelDownloadHelper"
-        
-        // Gemma 2B IT Q4 (Quantized for mobile) - ~1.5GB
-        // Alternative: Use a smaller test model or host your own
-        const val MODEL_URL = "https://huggingface.co/google/gemma-2b-it-gpu-int4/resolve/main/gemma-2b-it-gpu-int4.bin"
-        const val MODEL_FILENAME = "model.bin"
+
+        // GGUF model for llama.cpp. Host your own or provide a direct download.
+        const val MODEL_URL = ""
+        const val MODEL_FILENAME = "model.gguf"
     }
 
-    private val modelFile = File(context.filesDir, MODEL_FILENAME)
+    private val supportedExtensions = listOf("gguf", "tflite", "bin")
+    private val internalModelFile = File(context.filesDir, MODEL_FILENAME)
+    private val downloadsModelFile = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+        MODEL_FILENAME
+    )
 
     fun isModelDownloaded(): Boolean {
-        return modelFile.exists() && modelFile.length() > 0
+        // 内部ストレージをチェック
+        for (ext in supportedExtensions) {
+            val file = File(context.filesDir, "model.$ext")
+            if (file.exists() && file.length() > 0) return true
+        }
+        
+        // Downloads をチェック
+        for (ext in supportedExtensions) {
+            val file = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "model.$ext"
+            )
+            if (file.exists() && file.length() > 0) return true
+        }
+        
+        // 古い固定名もチェック
+        return (downloadsModelFile.exists() && downloadsModelFile.length() > 0) ||
+            (internalModelFile.exists() && internalModelFile.length() > 0)
+    }
+
+    fun getModelFile(): File? {
+        // 内部ストレージを優先
+        for (ext in supportedExtensions) {
+            val file = File(context.filesDir, "model.$ext")
+            if (file.exists() && file.length() > 0) return file
+        }
+        
+        // Downloads を次に
+        for (ext in supportedExtensions) {
+            val file = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "model.$ext"
+            )
+            if (file.exists() && file.length() > 0) return file
+        }
+        
+        // 古い固定名
+        if (downloadsModelFile.exists() && downloadsModelFile.length() > 0) {
+            return downloadsModelFile
+        }
+        if (internalModelFile.exists() && internalModelFile.length() > 0) {
+            return internalModelFile
+        }
+        return null
     }
 
     suspend fun downloadModel(onProgress: (Int) -> Unit): Result<File> = withContext(Dispatchers.IO) {
@@ -43,7 +91,7 @@ class ModelDownloadHelper(private val context: Context) {
 
             val fileLength = connection.contentLength
             val inputStream = connection.inputStream
-            val outputStream = FileOutputStream(modelFile)
+            val outputStream = FileOutputStream(internalModelFile)
 
             val buffer = ByteArray(8192)
             var totalBytesRead = 0L
@@ -65,13 +113,13 @@ class ModelDownloadHelper(private val context: Context) {
             outputStream.close()
             inputStream.close()
 
-            Log.i(TAG, "Model downloaded successfully: ${modelFile.absolutePath}")
-            Result.success(modelFile)
+            Log.i(TAG, "Model downloaded successfully: ${internalModelFile.absolutePath}")
+            Result.success(internalModelFile)
             
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
-            if (modelFile.exists()) {
-                modelFile.delete()
+            if (internalModelFile.exists()) {
+                internalModelFile.delete()
             }
             Result.failure(e)
         }

@@ -3,7 +3,19 @@ pub mod facs; // Expose the facs module so it's compiled
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JFloatArray};
-use jni::sys::{jlong, jstring, jint};
+use jni::sys::{jlong, jstring, jint, JavaVM};
+
+// ========== Library Load Confirmation ==========
+#[no_mangle]
+pub extern "system" fn JNI_OnLoad(_vm: *mut JavaVM, _reserved: *mut std::ffi::c_void) -> jint {
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(log::LevelFilter::Info)
+            .with_tag("recemotion_rust"),
+    );
+    log::info!("✅ librecemotion.so JNI_OnLoad called - Rust library loaded successfully");
+    jni::sys::JNI_VERSION_1_6
+}
 
 #[no_mangle]
 pub extern "system" fn Java_com_example_recemotion_MainActivity_initSession(

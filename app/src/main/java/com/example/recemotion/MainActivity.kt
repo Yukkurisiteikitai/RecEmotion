@@ -4,8 +4,11 @@ package com.example.recemotion
 import android.Manifest
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -17,11 +20,14 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.recemotion.databinding.ActivityMainBinding
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.FileOutputStream
 import java.util.Calendar
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -41,6 +47,41 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                 startCamera()
             } else {
                 Toast.makeText(this, "Permission request denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    private val requestStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                checkAndDownloadModel()
+            } else {
+                Toast.makeText(this, "Storage permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    private val openModelFileLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri == null) {
+                Log.i(TAG, "File selection cancelled")
+                return@registerForActivityResult
+            }
+            
+            // Show result console for feedback
+            binding.scrollResult.visibility = View.VISIBLE
+            binding.txtResult.text = "Loading model...\n"
+            
+            if (copyModelFromUri(uri)) {
+                binding.txtResult.append("Model file copied successfully.\n")
+                binding.txtResult.append("Initializing llama.cpp...\n")
+                llmInferenceHelper.initModel()
+                Toast.makeText(this, "Model imported and ready.", Toast.LENGTH_SHORT).show()
+            } else {
+                binding.txtResult.text = "Failed to import model.\n\n" +
+                    "Please ensure:\n" +
+                    "- File is a valid GGUF format\n" +
+                    "- File is not corrupted\n" +
+                    "- You have sufficient storage space"
+                Toast.makeText(this, "Failed to import model.", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -81,40 +122,49 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         }
 
         // Collect LLM Results
-        lifecycleScope.launchWhenStarted {
-            val fullResponse = StringBuilder()
-            llmInferenceHelper.partialResults.collect { part ->
-                binding.txtResult.append(part)
-                fullResponse.append(part)
-                binding.scrollResult.post { 
-                    binding.scrollResult.fullScroll(View.FOCUS_DOWN)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val fullResponse = StringBuilder()
+                llmInferenceHelper.partialResults.collect { part ->
+                    binding.txtResult.append(part)
+                    fullResponse.append(part)
+                    binding.scrollResult.post { 
+                        binding.scrollResult.fullScroll(View.FOCUS_DOWN)
+                    }
+                    
+                    // Simple heuristic to detect end: checks if part is empty or special token? 
+                    // MediaPipe doesn't emit "Done" signal in this simple flow. 
+                    // We'll log the partials or just log the Input in the button click for now.
                 }
-                
-                // Simple heuristic to detect end: checks if part is empty or special token? 
-                // MediaPipe doesn't emit "Done" signal in this simple flow. 
-                // We'll log the partials or just log the Input in the button click for now.
             }
         }
     }
 
     private fun checkAndDownloadModel() {
+        if (needsStoragePermission() && !hasStoragePermission()) {
+            requestStoragePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+            return
+        }
+
         if (!modelDownloadHelper.isModelDownloaded()) {
             android.app.AlertDialog.Builder(this)
                 .setTitle("LLM Model Required")
                 .setMessage("""
-                    This app requires a Gemma 2B model (~2.6GB) for on-device analysis.
-                    
-                    Download Steps:
-                    1. Visit: https://huggingface.co/litert-community/Gemma2-2B-IT
-                    2. Accept the Gemma license (login required)
-                    3. Download 'gemma2-2b-it-int8-web.task.bin' (2.63 GB)
-                    4. Rename to 'model.bin'
-                    5. Push to device:
-                       adb push model.bin /data/data/com.example.recemotion/files/model.bin
-                    
-                    Alternative: Use 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280.task' (2.71 GB)
+                          This app requires a GGUF model for llama.cpp.
+
+                          Download Steps:
+                          1. Download a GGUF model that fits your device.
+                          2. Rename it to 'model.gguf'.
+                          3. Move it to Downloads on your Android device:
+                              /storage/emulated/0/Download/model.gguf
+
+                          Alternative: You can still push to internal storage with:
+                              adb push model.gguf /data/data/com.example.recemotion/files/model.gguf
                 """.trimIndent())
-                .setPositiveButton("I've Downloaded It") { _, _ ->
+                .setPositiveButton("Select File") { _, _ ->
+                    openModelFileLauncher.launch(arrayOf("*/*"))
+                }
+                .setNeutralButton("I've Downloaded It") { _, _ ->
                     // Recheck if model exists
                     if (modelDownloadHelper.isModelDownloaded()) {
                         llmInferenceHelper.initModel()
@@ -123,15 +173,12 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                         Toast.makeText(this, "Model not found. Please follow the instructions.", Toast.LENGTH_LONG).show()
                     }
                 }
-                .setNeutralButton("Copy ADB Command") { _, _ ->
+                .setNegativeButton("Copy ADB Command") { _, _ ->
                     val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     val clip = android.content.ClipData.newPlainText("ADB Command", 
-                        "adb push model.bin /data/data/com.example.recemotion/files/model.bin")
+                        "adb push model.gguf /data/data/com.example.recemotion/files/model.gguf")
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(this, "Command copied to clipboard!", Toast.LENGTH_SHORT).show()
-                }
-                .setNegativeButton("Skip for Now") { _, _ ->
-                    Toast.makeText(this, "Analysis feature will be disabled.", Toast.LENGTH_SHORT).show()
                 }
                 .setCancelable(false)
                 .show()
@@ -139,6 +186,92 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             // Model exists, initialize LLM
             llmInferenceHelper.initModel()
         }
+    }
+
+    private fun needsStoragePermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        if (!needsStoragePermission()) return true
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // ファイルの場所を要求するもの
+    private fun copyModelFromUri(uri: Uri): Boolean {
+        return try {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, flags)
+
+            // ファイル名を取得
+            val fileName = getFileName(uri)
+            Log.i(TAG, "Selected file: $fileName")
+            
+            // 拡張子をチェック
+            if (!isSupportedModelFormat(fileName)) {
+                val errorMsg = "Unsupported format: $fileName. Supported: .gguf, .tflite, .bin"
+                Log.e(TAG, errorMsg)
+                runOnUiThread {
+                    binding.txtResult.text = "Error: $errorMsg\n\n" +
+                        "For llama.cpp, please select a .gguf file."
+                }
+                Toast.makeText(this, "Unsupported format. Supported: .gguf, .tflite, .bin", Toast.LENGTH_SHORT).show()
+                return false
+            }
+
+            // 拡張子を保持して固定名にリネーム（内部で複数モデル管理する場合は別途対応）
+            val extension = fileName.substringAfterLast(".")
+            val targetFileName = "model.$extension"  // model.gguf, model.tflite など
+            val targetFile = java.io.File(filesDir, targetFileName)
+            
+            Log.i(TAG, "Copying to: ${targetFile.absolutePath}")
+            
+            contentResolver.openInputStream(uri).use { inputStream ->
+                if (inputStream == null) {
+                    Log.e(TAG, "Failed to open input stream")
+                    return false
+                }
+                FileOutputStream(targetFile).use { outputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalBytes = 0L
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalBytes += bytesRead
+                    }
+                    Log.i(TAG, "Copied $totalBytes bytes")
+                }
+            }
+            Log.i(TAG, "✅ Model copied successfully to: ${targetFile.absolutePath}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to copy model file", e)
+            runOnUiThread {
+                binding.txtResult.text = "Error copying model file:\n${e.message}\n\n" +
+                    "Stack trace:\n${e.stackTraceToString()}"
+            }
+            false
+        }
+    }
+
+    private fun getFileName(uri: Uri): String {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        return cursor?.use {
+            val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (it.moveToFirst()) {
+                it.getString(index)
+            } else {
+                ModelDownloadHelper.MODEL_FILENAME
+            }
+        } ?: ModelDownloadHelper.MODEL_FILENAME
+    }
+
+    private fun isSupportedModelFormat(fileName: String): Boolean {
+        val extension = fileName.substringAfterLast(".").lowercase()
+        return extension in listOf("gguf", "tflite", "bin")
     }
 
 
@@ -184,6 +317,11 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             // No toast needed, overlay will appear
         }
 
+        // Select Model Button
+        binding.btnSelectModel.setOnClickListener {
+            openModelFileLauncher.launch(arrayOf("*/*"))
+        }
+
         // Analyze Button
         binding.btnAnalyze.setOnClickListener {
             val text = binding.edtReflection.text.toString()
@@ -196,28 +334,47 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             binding.scrollResult.visibility = View.VISIBLE
             binding.txtResult.text = "Analyzing...\n"
             
-            // Generate Prompt JSON
-            val jsonContext = getAnalysisJson(text)
+            // Check if model is initialized
+            if (!llmInferenceHelper.isModelInitialized()) {
+                binding.txtResult.text = "Error: LLM model is not initialized.\n\n" +
+                    "Please select a GGUF model file using the 'SELECT MODEL' button.\n\n" +
+                    "You can download GGUF models from:\n" +
+                    "- Hugging Face (search for 'gguf')\n" +
+                    "- llama.cpp compatible models\n\n" +
+                    "Recommended: Small models (< 1GB) for mobile devices."
+                Log.e(TAG, "Analysis failed: Model not initialized")
+                return@setOnClickListener
+            }
             
-            // Log Input
-            logToHistory(jsonContext)
-            
-            // Construct Prompt for LLM
-            val prompt = """
-                You are an expert psychological counselor. Analyze the user's emotion data and reflection.
+            try {
+                // Generate Prompt JSON
+                val jsonContext = getAnalysisJson(text)
                 
-                Methodology:
-                1. Detect discrepancies between stated emotion (text) and physical emotion (face).
-                2. Consider physical state (Energy, Stress) as factors.
-                3. Ask a probing question to deepen insight.
+                // Log Input
+                logToHistory(jsonContext)
                 
-                Input Data (JSON):
-                $jsonContext
-                
-                Response (Keep it short, empathetic, and insightful):
-            """.trimIndent()
+                // Construct Prompt for LLM
+                val prompt = """
+                    You are an expert psychological counselor. Analyze the user's emotion data and reflection.
+                    
+                    Methodology:
+                    1. Detect discrepancies between stated emotion (text) and physical emotion (face).
+                    2. Consider physical state (Energy, Stress) as factors.
+                    3. Ask a probing question to deepen insight.
+                    
+                    Input Data (JSON):
+                    $jsonContext
+                    
+                    Response (Keep it short, empathetic, and insightful):
+                """.trimIndent()
 
-            llmInferenceHelper.generateResponse(prompt)
+                llmInferenceHelper.generateResponse(prompt)
+                
+            } catch (e: Exception) {
+                binding.txtResult.text = "Error during analysis:\n${e.message}\n\n" +
+                    "Stack trace:\n${e.stackTraceToString()}"
+                Log.e(TAG, "Analysis failed with exception", e)
+            }
 
             // Hide keyboard
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
@@ -343,7 +500,13 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         const val TAG = "RecEmotion_Main"
 
         init {
-            System.loadLibrary("recemotion")
+            try {
+                System.loadLibrary("recemotion")
+                Log.i(TAG, "✅ librecemotion.so (Rust) loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "❌ Failed to load librecemotion.so: ${e.message}", e)
+                throw e
+            }
         }
 
         // JNI Bridge Functions
