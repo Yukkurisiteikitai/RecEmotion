@@ -18,7 +18,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            // Only arm64-v8a for 16KB page alignment compatibility
+            abiFilters.clear()
+            abiFilters += "arm64-v8a"
+        }
+        
+        // 16KB page alignment for Android 15+ compatibility
+        externalNativeBuild {
+            cmake {
+                arguments += listOf(
+                    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
+                    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
+                )
+            }
         }
     }
 
@@ -62,6 +74,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
     // MediaPipe
     val mediapipeVersion = "0.10.+"
@@ -84,6 +99,8 @@ tasks.register<Exec>("cargoBuild") {
 
     workingDir = file("src/main/rust")
     environment("ANDROID_NDK_HOME", "/Users/yuuto/Library/Android/sdk/ndk/29.0.14206865")
+    // Add 16KB page alignment for Android 15+ compatibility
+    environment("RUSTFLAGS", "-C link-arg=-Wl,-z,max-page-size=16384")
     commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-o", "../jniLibs", "build", "--release")
 }
 

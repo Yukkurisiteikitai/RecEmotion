@@ -324,6 +324,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
 
         // Analyze Button
         binding.btnAnalyze.setOnClickListener {
+            Log.d(TAG, "=== ANALYZE button clicked ===")
             val text = binding.edtReflection.text.toString()
             if (text.isEmpty()) {
                 Toast.makeText(this, "Please write a reflection first.", Toast.LENGTH_SHORT).show()
@@ -333,9 +334,13 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             // Show Result View
             binding.scrollResult.visibility = View.VISIBLE
             binding.txtResult.text = "Analyzing...\n"
+            Log.d(TAG, "Result view shown")
             
             // Check if model is initialized
-            if (!llmInferenceHelper.isModelInitialized()) {
+            val modelInitialized = llmInferenceHelper.isModelInitialized()
+            Log.d(TAG, "Model initialized: $modelInitialized")
+            
+            if (!modelInitialized) {
                 binding.txtResult.text = "Error: LLM model is not initialized.\n\n" +
                     "Please select a GGUF model file using the 'SELECT MODEL' button.\n\n" +
                     "You can download GGUF models from:\n" +
@@ -348,7 +353,9 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             
             try {
                 // Generate Prompt JSON
+                Log.d(TAG, "Generating analysis JSON...")
                 val jsonContext = getAnalysisJson(text)
+                Log.d(TAG, "JSON generated: ${jsonContext.take(200)}...")
                 
                 // Log Input
                 logToHistory(jsonContext)
@@ -368,7 +375,9 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                     Response (Keep it short, empathetic, and insightful):
                 """.trimIndent()
 
+                Log.d(TAG, "Calling llmInferenceHelper.generateResponse...")
                 llmInferenceHelper.generateResponse(prompt)
+                Log.d(TAG, "generateResponse call completed")
                 
             } catch (e: Exception) {
                 binding.txtResult.text = "Error during analysis:\n${e.message}\n\n" +

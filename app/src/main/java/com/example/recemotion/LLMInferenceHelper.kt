@@ -101,24 +101,48 @@ class LLMInferenceHelper(val context: Context) {
     }
 
     fun generateResponse(prompt: String) {
+        Log.d(TAG, "=== generateResponse called ===")
+        Log.d(TAG, "isInitialized: $isInitialized, modelType: $modelType")
+        
         if (!isInitialized) {
             Log.w(TAG, "Model not initialized, attempting to initialize...")
             _partialResults.tryEmit("Model not initialized. Attempting to load...\n")
             initModel()
             if (!isInitialized) {
+                Log.e(TAG, "Failed to initialize model")
                 _partialResults.tryEmit("\nError: Failed to initialize model. Please select a valid GGUF file.")
                 return
             }
         }
 
+        Log.i(TAG, "Starting background thread for inference")
         Thread {
             try {
-                Log.i(TAG, "Starting inference with ${modelType.name} model")
+                Log.i(TAG, "Thread started - Starting inference with ${modelType.name} model")
                 _partialResults.tryEmit("\n--- LLM Response ---\n")
+
+                val effectivePrompt = if (DEBUG_SHORT_PROMPT) {
+                    Log.w(TAG, "DEBUG_SHORT_PROMPT enabled: overriding input prompt")
+                    DEBUG_PROMPT_TEXT
+                } else {
+                    prompt
+                }
+                val effectiveMaxTokens = if (DEBUG_SHORT_PROMPT) DEBUG_MAX_TOKENS else 32
+
+                Log.d(TAG, "Prompt length: ${effectivePrompt.length} characters")
+                Log.d(TAG, "Calling native generate with max_tokens=$effectiveMaxTokens...")
                 
                 val result = when (modelType) {
                     ModelType.GGUF -> {
-                        val response = nativeGenerate(prompt, DEFAULT_MAX_TOKENS)
+                        Log.d(TAG, "Calling nativeGenerate...")
+                        val startTime = System.currentTimeMillis()
+                        
+                        // Reduced max tokens for mobile (32 instead of 512)
+                        val response = nativeGenerate(effectivePrompt, effectiveMaxTokens)
+                        
+                        val elapsedTime = System.currentTimeMillis() - startTime
+                        Log.d(TAG, "nativeGenerate returned after ${elapsedTime}ms: ${response.take(100)}...")
+                        
                         if (response.startsWith("Model is not initialized") || 
                             response.startsWith("Failed") || 
                             response.startsWith("Error")) {
@@ -129,7 +153,8 @@ class LLMInferenceHelper(val context: Context) {
                         }
                     }
                     ModelType.TFLITE -> {
-                        val response = nativeGenerateTFLite(prompt, DEFAULT_MAX_TOKENS)
+                        Log.d(TAG, "Calling nativeGenerateTFLite...")
+                        val response = nativeGenerateTFLite(effectivePrompt, effectiveMaxTokens)
                         if (response.contains("not yet implemented")) {
                             Log.e(TAG, "TFLite not implemented: $response")
                             "Error: $response"
@@ -137,10 +162,15 @@ class LLMInferenceHelper(val context: Context) {
                             response
                         }
                     }
-                    ModelType.UNKNOWN -> "Error: Model type is unknown. Please reinitialize the model."
+                    ModelType.UNKNOWN -> {
+                        Log.e(TAG, "Model type is UNKNOWN")
+                        "Error: Model type is unknown. Please reinitialize the model."
+                    }
                 }
                 
-                _partialResults.tryEmit(result)
+                Log.i(TAG, "Emitting result to flow...")
+                val emitted = _partialResults.tryEmit(result)
+                Log.i(TAG, "Result emitted: $emitted")
                 Log.i(TAG, "Inference completed: ${result.take(100)}...")
             } catch (e: Exception) {
                 val errorMsg = "Error generating response:\n${e.message}\n\nStack trace:\n${e.stackTraceToString()}"
@@ -148,6 +178,7 @@ class LLMInferenceHelper(val context: Context) {
                 _partialResults.tryEmit(errorMsg)
             }
         }.start()
+        Log.d(TAG, "Background thread started")
     }
 
     fun close() {
@@ -200,6 +231,9 @@ class LLMInferenceHelper(val context: Context) {
         const val TAG = "LLMInferenceHelper"
         private const val DEFAULT_CTX = 2048
         private const val DEFAULT_MAX_TOKENS = 128
+        private const val DEBUG_SHORT_PROMPT = true
+        private const val DEBUG_PROMPT_TEXT = "Hello"
+        private const val DEBUG_MAX_TOKENS = 8
 
         init {
             try {
