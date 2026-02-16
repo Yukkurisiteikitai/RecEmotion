@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "com.example.recemotion"
     compileSdk = 35
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "com.example.recemotion"
@@ -15,6 +16,22 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // Only arm64-v8a for 16KB page alignment compatibility
+            abiFilters.clear()
+            abiFilters += "arm64-v8a"
+        }
+        
+        // 16KB page alignment for Android 15+ compatibility
+        externalNativeBuild {
+            cmake {
+                arguments += listOf(
+                    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
+                    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
+                )
+            }
+        }
     }
 
     buildTypes {
@@ -32,6 +49,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
     sourceSets {
         getByName("main") {
@@ -51,6 +74,22 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
+    // MediaPipe
+    val mediapipeVersion = "0.10.+"
+    implementation("com.google.mediapipe:tasks-vision:$mediapipeVersion")
+    implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
+
+    // CameraX
+    val cameraxVersion = "1.3.1"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
 }
 
 tasks.register<Exec>("cargoBuild") {
@@ -60,9 +99,17 @@ tasks.register<Exec>("cargoBuild") {
 
     workingDir = file("src/main/rust")
     environment("ANDROID_NDK_HOME", "/Users/yuuto/Library/Android/sdk/ndk/29.0.14206865")
-    commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-t", "x86_64-linux-android", "-o", "../jniLibs", "build", "--release")
+    // Add 16KB page alignment for Android 15+ compatibility
+    environment("RUSTFLAGS", "-C link-arg=-Wl,-z,max-page-size=16384")
+    commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-o", "../jniLibs", "build", "--release")
+}
+
+tasks.register<Copy>("copyCMakeLibs") {
+    from("app/build/intermediates/cmake/debug/obj/arm64-v8a")
+    into("app/src/main/jniLibs/arm64-v8a")
+    include("libllama_jni.so")
 }
 
 tasks.named("preBuild") {
-    dependsOn("cargoBuild")
+    dependsOn("cargoBuild", "copyCMakeLibs")  // 両方実行
 }

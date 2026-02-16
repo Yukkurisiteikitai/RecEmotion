@@ -1,0 +1,16 @@
+{
+  "configurations": [
+    {
+      "name": "Android",
+      "includePath": [
+        "${workspaceFolder}/app/src/main/cpp/**",
+        "${env:ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include",
+        "${env:ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/aarch64-linux-android"
+      ],
+      "defines": ["__ANDROID__"],
+      "cStandard": "c11",
+      "cppStandard": "c++17"
+    }
+  ],
+  "version": 4
+}
