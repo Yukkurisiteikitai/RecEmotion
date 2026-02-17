@@ -492,11 +492,16 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
 
         currentScreen = screen
         val isCalendar = screen == Screen.CALENDAR
+        val isMAIN = screen == Screen.MAIN
 
         if (isCalendar) {
             cachedResultVisibility = binding.scrollResult.visibility
             cachedProgressVisibility = binding.progressContainer.visibility
             cachedCalibrationVisibility = binding.overlayCalibration.visibility
+            stopCamera()
+        }
+        if (isMAIN) {
+            startCamera()
         }
 
         binding.cardCalendar.visibility = if (isCalendar) View.VISIBLE else View.GONE
@@ -572,6 +577,13 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                 Log.e(TAG, "Use case binding failed", exc)
             }
 
+        }, ContextCompat.getMainExecutor(this))
+    }
+    private fun stopCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+            cameraProvider.unbindAll()
         }, ContextCompat.getMainExecutor(this))
     }
 
