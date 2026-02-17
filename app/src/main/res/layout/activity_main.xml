@@ -9,9 +9,12 @@
     tools:context=".MainActivity">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/mainContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#000000">
+        android:background="#000000"
+        android:clickable="true"
+        android:focusable="true">
 
     <!-- Camera Preview (Full Screen) -->
     <androidx.camera.view.PreviewView
@@ -26,7 +29,10 @@
         android:id="@+id/cardTopInfo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="24dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
         app:cardBackgroundColor="#80000000"
         app:cardCornerRadius="0dp"
         app:cardElevation="0dp"
@@ -71,19 +77,6 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/btnMenu"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:background="#33000000"
-        android:contentDescription="Open menu"
-        android:padding="8dp"
-        android:src="@drawable/ic_menu_24"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="#FFFFFF" />
 
     <!-- Calendar + Journal Card -->
     <androidx.cardview.widget.CardView
@@ -431,6 +424,20 @@
             </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/btnMenu"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="24dp"
+        android:background="#33000000"
+        android:contentDescription="Open menu"
+        android:padding="8dp"
+        android:src="@drawable/ic_menu_24"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="#FFFFFF" />
 
     <!-- Bottom Controls -->
     <androidx.cardview.widget.CardView

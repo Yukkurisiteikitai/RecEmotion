@@ -11,6 +11,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,6 +102,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
     private lateinit var llmInferenceHelper: LLMInferenceHelper
     private lateinit var modelDownloadHelper: ModelDownloadHelper
     private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
+    private lateinit var gestureDetector: GestureDetector
 
     private enum class Screen {
         MAIN,
@@ -115,13 +118,16 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
+        
+        
+        supportActionBar?.hide()
         cameraExecutor = Executors.newSingleThreadExecutor()
         faceLandmarkerHelper = FaceLandmarkerHelper(context = this, faceLandmarkerHelperListener = this)
         llmInferenceHelper = LLMInferenceHelper(this)
         modelDownloadHelper = ModelDownloadHelper(this)
         thoughtAnalysisViewModel = createThoughtAnalysisViewModel()
 
+        setupSwipeGesture()
         setupUI()
         
         // Default Wake Time: 7:00 AM Today
@@ -448,6 +454,36 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             // Hide keyboard
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
+        }
+    }
+
+    private fun setupSwipeGesture() {
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                val diffX = e2.x - (e1?.x ?: 0f)
+                val diffY = e2.y - (e1?.y ?: 0f)
+                
+                // 横方向のスワイプを優先
+                if (kotlin.math.abs(diffX) > kotlin.math.abs(diffY)) {
+                    // 左から右へのスワイプ
+                    if (diffX > 100 && kotlin.math.abs(velocityX) > 100) {
+                        binding.drawerLayout.openDrawer(GravityCompat.START)
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
+        // メインコンテンツ全体にタッチリスナーを設定
+        binding.mainContent.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            false // 他のタッチイベントも処理させる
         }
     }
 
