@@ -5,13 +5,17 @@ import android.os.Environment
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
+import com.example.recemotion.data.llm.LlmStreamEvent
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import java.io.File
 
 class LLMInferenceHelper(val context: Context) {
@@ -133,6 +137,51 @@ class LLMInferenceHelper(val context: Context) {
             _partialResults.tryEmit("Error: failed to generate response.")
             updateProgress(stage = Stage.ERROR, message = "Error: failed to generate")
         }
+    }
+
+    fun analyzeThoughtStructure(structureText: String): Flow<LlmStreamEvent> = callbackFlow {
+        if (!isInitialized) {
+            initModel()
+        }
+
+        val inference = llmInference
+        if (inference == null || !isInitialized) {
+            trySend(LlmStreamEvent.Error("Model is not initialized"))
+            close()
+            return@callbackFlow
+        }
+
+        var fullText = ""
+        val promptLimit = (MAX_TOTAL_TOKENS - OUTPUT_TOKENS_RESERVE).coerceAtLeast(1)
+        val trimmedPrompt = trimPromptToTokenLimit(inference, structureText, promptLimit)
+
+        val listener = ProgressListener<String> { result, done ->
+            val resultText = extractResultText(result)
+            val delta = if (resultText.startsWith(fullText)) {
+                resultText.substring(fullText.length)
+            } else {
+                resultText
+            }
+
+            if (delta.isNotEmpty()) {
+                trySend(LlmStreamEvent.Delta(delta))
+            }
+
+            fullText = resultText
+            if (done) {
+                trySend(LlmStreamEvent.Done(fullText))
+                close()
+            }
+        }
+
+        try {
+            inference.generateResponseAsync(trimmedPrompt, listener)
+        } catch (e: Exception) {
+            trySend(LlmStreamEvent.Error(e.message ?: "LLM error"))
+            close()
+        }
+
+        awaitClose { }
     }
 
     fun close() {
