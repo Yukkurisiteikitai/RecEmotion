@@ -22,16 +22,6 @@ android {
             abiFilters.clear()
             abiFilters += "arm64-v8a"
         }
-        
-        // 16KB page alignment for Android 15+ compatibility
-        externalNativeBuild {
-            cmake {
-                arguments += listOf(
-                    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
-                    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
-                )
-            }
-        }
     }
 
     buildTypes {
@@ -49,12 +39,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
-    }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
     sourceSets {
         getByName("main") {
@@ -104,12 +88,6 @@ tasks.register<Exec>("cargoBuild") {
     commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-o", "../jniLibs", "build", "--release")
 }
 
-tasks.register<Copy>("copyCMakeLibs") {
-    from("app/build/intermediates/cmake/debug/obj/arm64-v8a")
-    into("app/src/main/jniLibs/arm64-v8a")
-    include("libllama_jni.so")
-}
-
 tasks.named("preBuild") {
-    dependsOn("cargoBuild", "copyCMakeLibs")  // 両方実行
+    dependsOn("cargoBuild")
 }
