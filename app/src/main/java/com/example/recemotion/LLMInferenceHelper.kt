@@ -5,13 +5,17 @@ import android.os.Environment
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
+import com.example.recemotion.data.llm.LlmStreamEvent
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import java.io.File
 
 class LLMInferenceHelper(val context: Context) {
@@ -107,32 +111,66 @@ class LLMInferenceHelper(val context: Context) {
             return
         }
 
-        lastResultText = ""
-        updateProgress(stage = Stage.GENERATING, current = 0, total = 0, message = "Generating")
-        _partialResults.tryEmit("\n--- MediaPipe LLM Response ---\n")
+        generateResponseBySentence(
+            inference = inference,
+            prompt = prompt,
+            onSentence = { sentence ->
+                _partialResults.tryEmit(sentence + "\n")
+            },
+            onComplete = {
+                updateProgress(stage = Stage.DONE, message = "Done")
+            },
+            onError = { error ->
+                Log.e(TAG, "Error generating response", error)
+                _partialResults.tryEmit("Error: failed to generate response.")
+                updateProgress(stage = Stage.ERROR, message = "Error: failed to generate")
+            }
+        )
+    }
+
+    fun analyzeThoughtStructure(structureText: String): Flow<LlmStreamEvent> = callbackFlow {
+        if (!isInitialized) {
+            initModel()
+        }
+
+        val inference = llmInference
+        if (inference == null || !isInitialized) {
+            trySend(LlmStreamEvent.Error("Model is not initialized"))
+            close()
+            return@callbackFlow
+        }
+
+        var fullText = ""
+        val promptLimit = (MAX_TOTAL_TOKENS - OUTPUT_TOKENS_RESERVE).coerceAtLeast(1)
+        val trimmedPrompt = trimPromptToTokenLimit(inference, structureText, promptLimit)
+
+        val listener = ProgressListener<String> { result, done ->
+            val resultText = extractResultText(result)
+            val delta = if (resultText.startsWith(fullText)) {
+                resultText.substring(fullText.length)
+            } else {
+                resultText
+            }
+
+            if (delta.isNotEmpty()) {
+                trySend(LlmStreamEvent.Delta(delta))
+            }
+
+            fullText = resultText
+            if (done) {
+                trySend(LlmStreamEvent.Done(fullText))
+                close()
+            }
+        }
 
         try {
-            val promptLimit = (MAX_TOTAL_TOKENS - OUTPUT_TOKENS_RESERVE).coerceAtLeast(1)
-            val trimmedPrompt = trimPromptToTokenLimit(inference, prompt, promptLimit)
-            val listener = ProgressListener<String> { result, done ->
-                handleResult(result, done)
-                if (!done) {
-                    val tokenCount = estimateTokenCount(inference, result)
-                    updateProgress(
-                        stage = Stage.GENERATING,
-                        current = tokenCount,
-                        total = MAX_TOTAL_TOKENS.toLong(),
-                        message = "Generating"
-                    )
-                }
-            }
             inference.generateResponseAsync(trimmedPrompt, listener)
-            Log.d(TAG, "MediaPipe LLM generation started")
         } catch (e: Exception) {
-            Log.e(TAG, "Error generating response", e)
-            _partialResults.tryEmit("Error: failed to generate response.")
-            updateProgress(stage = Stage.ERROR, message = "Error: failed to generate")
+            trySend(LlmStreamEvent.Error(e.message ?: "LLM error"))
+            close()
         }
+
+        awaitClose { }
     }
 
     fun close() {
@@ -176,32 +214,101 @@ class LLMInferenceHelper(val context: Context) {
         return null
     }
 
-    private fun handleResult(result: Any?, done: Boolean) {
-        val resultText = extractResultText(result)
-        if (resultText.isNotEmpty()) {
-            val delta = if (resultText.startsWith(lastResultText)) {
-                resultText.substring(lastResultText.length)
-            } else {
-                resultText
-            }
-
-            if (delta.isNotEmpty()) {
-                _partialResults.tryEmit(delta)
-            }
-            lastResultText = resultText
-        }
-
-        if (done) {
-            updateProgress(stage = Stage.DONE, message = "Done")
-        }
-    }
-
     private fun extractResultText(result: Any?): String {
         return when (result) {
             null -> ""
             is String -> result
             else -> result.toString()
         }
+    }
+
+    private fun generateResponseBySentence(
+        inference: LlmInference,
+        prompt: String,
+        onSentence: (String) -> Unit,
+        onComplete: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        lastResultText = ""
+        updateProgress(stage = Stage.GENERATING, current = 0, total = 0, message = "Generating")
+        _partialResults.tryEmit("\n--- MediaPipe LLM Response ---\n")
+
+        val promptLimit = (MAX_TOTAL_TOKENS - OUTPUT_TOKENS_RESERVE).coerceAtLeast(1)
+        val trimmedPrompt = trimPromptToTokenLimit(inference, prompt, promptLimit)
+
+        val buffer = StringBuilder()
+        var lastProcessedLength = 0
+
+        try {
+            val listener = ProgressListener<String> { result, done ->
+                val resultText = extractResultText(result)
+                if (resultText.length > lastProcessedLength) {
+                    val newText = resultText.substring(lastProcessedLength)
+                    buffer.append(newText)
+                    lastProcessedLength = resultText.length
+                }
+
+                val sentences = extractCompleteSentences(buffer, keepIncomplete = !done)
+                if (sentences.isNotEmpty()) {
+                    sentences.forEach(onSentence)
+                }
+
+                if (!done) {
+                    val tokenCount = estimateTokenCount(inference, resultText)
+                    updateProgress(
+                        stage = Stage.GENERATING,
+                        current = tokenCount,
+                        total = MAX_TOTAL_TOKENS.toLong(),
+                        message = "Generating"
+                    )
+                } else {
+                    if (buffer.isNotEmpty()) {
+                        onSentence(buffer.toString().trim())
+                        buffer.clear()
+                    }
+                    onComplete()
+                }
+            }
+            inference.generateResponseAsync(trimmedPrompt, listener)
+            Log.d(TAG, "MediaPipe LLM generation started")
+        } catch (e: Exception) {
+            onError(e)
+        }
+    }
+
+    private fun extractCompleteSentences(
+        buffer: StringBuilder,
+        keepIncomplete: Boolean
+    ): List<String> {
+        val text = buffer.toString()
+        if (text.isBlank()) return emptyList()
+
+        val results = mutableListOf<String>()
+        val matches = SENTENCE_END_PATTERN.findAll(text).toList()
+        if (matches.isEmpty()) {
+            if (!keepIncomplete && text.isNotBlank()) {
+                results.add(text.trim())
+                buffer.clear()
+            }
+            return results
+        }
+
+        val lastMatch = matches.last()
+        val lastSentenceEnd = lastMatch.range.last + 1
+        val completedText = text.substring(0, lastSentenceEnd)
+        var start = 0
+
+        SENTENCE_END_PATTERN.findAll(completedText).forEach { match ->
+            val end = match.range.last + 1
+            val sentence = completedText.substring(start, end).trim()
+            if (sentence.isNotEmpty()) {
+                results.add(sentence)
+            }
+            start = end
+        }
+
+        buffer.delete(0, lastSentenceEnd)
+        return results
     }
 
     private fun estimateTokenCount(inference: LlmInference, text: String): Long {
@@ -265,6 +372,13 @@ class LLMInferenceHelper(val context: Context) {
         const val TAG = "LLMInferenceHelper"
         private const val MAX_TOTAL_TOKENS = 512
         private const val OUTPUT_TOKENS_RESERVE = 96
+        private val SENTENCE_END_PATTERN = Regex(
+            """
+            (?<=[。！？.!?])
+            (?=\s|$|[「『（\[A-Z0-9])
+            """.trimIndent(),
+            RegexOption.COMMENTS
+        )
     }
 
     private fun sanitizeAscii(message: String): String {
