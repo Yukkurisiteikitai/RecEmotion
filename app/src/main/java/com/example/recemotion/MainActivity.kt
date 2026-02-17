@@ -20,6 +20,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -99,6 +100,16 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
     private lateinit var llmInferenceHelper: LLMInferenceHelper
     private lateinit var modelDownloadHelper: ModelDownloadHelper
     private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
+
+    private enum class Screen {
+        MAIN,
+        CALENDAR
+    }
+
+    private var currentScreen: Screen = Screen.CALENDAR
+    private var cachedResultVisibility: Int = View.GONE
+    private var cachedProgressVisibility: Int = View.GONE
+    private var cachedCalibrationVisibility: Int = View.GONE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -370,6 +381,22 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
     }
 
     private fun setupUI() {
+        binding.btnMenu.setOnClickListener {
+            binding.drawerLayout.openDrawer(GravityCompat.START)
+        }
+
+        binding.navView.setNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.menu_main -> setScreen(Screen.MAIN)
+                R.id.menu_calendar -> setScreen(Screen.CALENDAR)
+            }
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+            true
+        }
+
+        binding.navView.setCheckedItem(R.id.menu_main)
+        setScreen(Screen.MAIN)
+
         // Wake Time Picker
         binding.btnSetWakeTime.setOnClickListener {
             val cal = Calendar.getInstance()
@@ -421,6 +448,34 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             // Hide keyboard
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
+        }
+    }
+
+    private fun setScreen(screen: Screen) {
+        if (currentScreen == screen) return
+
+        currentScreen = screen
+        val isCalendar = screen == Screen.CALENDAR
+
+        if (isCalendar) {
+            cachedResultVisibility = binding.scrollResult.visibility
+            cachedProgressVisibility = binding.progressContainer.visibility
+            cachedCalibrationVisibility = binding.overlayCalibration.visibility
+        }
+
+        binding.cardCalendar.visibility = if (isCalendar) View.VISIBLE else View.GONE
+        binding.viewFinder.visibility = if (isCalendar) View.GONE else View.VISIBLE
+        binding.cardTopInfo.visibility = if (isCalendar) View.GONE else View.VISIBLE
+        binding.cardControls.visibility = if (isCalendar) View.GONE else View.VISIBLE
+
+        if (isCalendar) {
+            binding.scrollResult.visibility = View.GONE
+            binding.progressContainer.visibility = View.GONE
+            binding.overlayCalibration.visibility = View.GONE
+        } else {
+            binding.scrollResult.visibility = cachedResultVisibility
+            binding.progressContainer.visibility = cachedProgressVisibility
+            binding.overlayCalibration.visibility = cachedCalibrationVisibility
         }
     }
 
