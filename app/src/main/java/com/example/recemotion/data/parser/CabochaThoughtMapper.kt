@@ -1,5 +1,6 @@
 package com.example.recemotion.data.parser
 
+import android.util.Log
 import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
 
@@ -10,8 +11,11 @@ class CabochaThoughtMapper {
 
     fun map(result: CabochaResult): ThoughtStructure {
         if (result.chunks.isEmpty()) {
+            Log.d(TAG, "Thought map skipped: no chunks")
             return ThoughtStructure()
         }
+
+        Log.d(TAG, "Thought map start: chunks=${result.chunks.size}")
 
         val nodes = result.chunks.associate { chunk ->
             chunk.id to ThoughtNode(id = chunk.id.toString(), text = chunk.text)
@@ -41,6 +45,12 @@ class CabochaThoughtMapper {
             roots.addAll(nodes.values)
         }
 
+        Log.d(TAG, "Thought map done: roots=${roots.size}")
+
         return ThoughtStructure(roots = roots)
+    }
+
+    companion object {
+        private const val TAG = "CabochaThoughtMapper"
     }
 }

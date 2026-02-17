@@ -23,7 +23,18 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.example.recemotion.databinding.ActivityMainBinding
+import com.example.recemotion.data.db.AppDatabase
+import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
+import com.example.recemotion.data.llm.ThoughtPromptBuilder
+import com.example.recemotion.data.parser.CabochaDependencyParser
+import com.example.recemotion.data.parser.CabochaThoughtMapper
+import com.example.recemotion.data.repository.ThoughtRepository
+import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
+import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
+import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -87,6 +98,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
 
     private lateinit var llmInferenceHelper: LLMInferenceHelper
     private lateinit var modelDownloadHelper: ModelDownloadHelper
+    private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +109,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
         faceLandmarkerHelper = FaceLandmarkerHelper(context = this, faceLandmarkerHelperListener = this)
         llmInferenceHelper = LLMInferenceHelper(this)
         modelDownloadHelper = ModelDownloadHelper(this)
+        thoughtAnalysisViewModel = createThoughtAnalysisViewModel()
 
         setupUI()
         
@@ -159,6 +172,47 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                         binding.progressBar.progress = currentValue
                     } else {
                         binding.progressBar.isIndeterminate = true
+                    }
+                }
+            }
+        }
+
+        // Collect Thought Structuring UI State
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                thoughtAnalysisViewModel.uiState.collect { state ->
+                    if (state.isAnalyzing) {
+                        binding.scrollResult.visibility = View.VISIBLE
+                        binding.progressContainer.visibility = View.VISIBLE
+                    }
+
+                    state.error?.let { error ->
+                        binding.scrollResult.visibility = View.VISIBLE
+                        binding.progressContainer.visibility = View.GONE
+                        binding.txtResult.text = "Error: $error"
+                    }
+
+                    if (state.partialStreamingText.isNotBlank()) {
+                        binding.scrollResult.visibility = View.VISIBLE
+                        binding.txtResult.text = state.partialStreamingText
+                        binding.scrollResult.post {
+                            binding.scrollResult.fullScroll(View.FOCUS_DOWN)
+                        }
+                    }
+
+                    state.finalResult?.let { result ->
+                        binding.progressContainer.visibility = View.GONE
+                        val summary = buildString {
+                            append("\n--- Thought Analysis ---\n")
+                            append("Premises: ").append(result.premises.joinToString())
+                            append("\nEmotions: ").append(result.emotions.joinToString())
+                            append("\nInferences: ").append(result.inferences.joinToString())
+                            append("\nPossible Biases: ")
+                            append(result.possibleBiases.joinToString { it.name })
+                            append("\nMissing Perspectives: ")
+                            append(result.missingPerspectives.joinToString { it.description })
+                        }
+                        binding.txtResult.append(summary)
                     }
                 }
             }
@@ -362,60 +416,38 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             binding.scrollResult.visibility = View.VISIBLE
             binding.txtResult.text = "Analyzing...\n"
             Log.d(TAG, "Result view shown")
-            
-            // Check if model is initialized
-            val modelInitialized = llmInferenceHelper.isModelInitialized()
-            Log.d(TAG, "Model initialized: $modelInitialized")
-            
-            if (!modelInitialized) {
-                binding.txtResult.text = "Error: LLM model is not initialized.\n\n" +
-                    "Please select a MediaPipe LLM model file using the 'SELECT MODEL' button.\n\n" +
-                    "You can download MediaPipe LLM models from:\n" +
-                    "- MediaPipe Tasks examples and model pages\n" +
-                    "- Hugging Face (search for .task or .bin)\n\n" +
-                    "Recommended: Small models (< 1 GB) for mobile devices."
-                Log.e(TAG, "Analysis failed: Model not initialized")
-                return@setOnClickListener
-            }
-            
-            try {
-                // Generate Prompt JSON
-                Log.d(TAG, "Generating analysis JSON...")
-                val jsonContext = getAnalysisJson(text)
-                Log.d(TAG, "JSON generated: ${jsonContext.take(200)}...")
-                
-                // Log Input
-                logToHistory(jsonContext)
-                
-                // Construct Prompt for LLM
-                val prompt = """
-                    You are an expert psychological counselor. Analyze the user's emotion data and reflection.
-                    
-                    Methodology:
-                    1. Detect discrepancies between stated emotion (text) and physical emotion (face).
-                    2. Consider physical state (Energy, Stress) as factors.
-                    3. Ask a probing question to deepen insight.
-                    
-                    Input Data (JSON):
-                    $jsonContext
-                    
-                    Response (Keep it short, empathetic, and insightful):
-                """.trimIndent()
-
-                Log.d(TAG, "Calling llmInferenceHelper.generateResponse...")
-                llmInferenceHelper.generateResponse(prompt)
-                Log.d(TAG, "generateResponse call completed")
-                
-            } catch (e: Exception) {
-                binding.txtResult.text = "Error during analysis:\n${e.message}\n\n" +
-                    "Stack trace:\n${e.stackTraceToString()}"
-                Log.e(TAG, "Analysis failed with exception", e)
-            }
+            thoughtAnalysisViewModel.analyze(text)
 
             // Hide keyboard
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
         }
+    }
+
+    private fun createThoughtAnalysisViewModel(): ThoughtAnalysisViewModel {
+        val db = AppDatabase.getInstance(this)
+        val repository = ThoughtRepository(db.thoughtEntryDao(), db.thoughtAnalysisDao())
+        val useCase = AnalyzeThoughtUseCase(
+            parser = CabochaDependencyParser(),
+            mapper = CabochaThoughtMapper(),
+            promptBuilder = ThoughtPromptBuilder(),
+            llmHelper = llmInferenceHelper,
+            jsonParser = ThoughtAnalysisJsonParser(),
+            repository = repository,
+            serializer = ThoughtStructureJsonAdapter()
+        )
+
+        val factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                if (modelClass.isAssignableFrom(ThoughtAnalysisViewModel::class.java)) {
+                    @Suppress("UNCHECKED_CAST")
+                    return ThoughtAnalysisViewModel(useCase) as T
+                }
+                throw IllegalArgumentException("Unknown ViewModel class")
+            }
+        }
+
+        return ViewModelProvider(this, factory)[ThoughtAnalysisViewModel::class.java]
     }
 
     private fun startCamera() {
