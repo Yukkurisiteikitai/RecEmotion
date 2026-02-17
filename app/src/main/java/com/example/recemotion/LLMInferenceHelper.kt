@@ -3,15 +3,21 @@ package com.example.recemotion
 import android.content.Context
 import android.os.Environment
 import android.util.Log
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.mediapipe.tasks.genai.llminference.ProgressListener
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 class LLMInferenceHelper(val context: Context) {
     private var isInitialized = false
-    private var modelType: ModelType = ModelType.UNKNOWN
+    private var llmInference: LlmInference? = null
+    private var lastResultText = ""
 
     private val modelFilename = ModelDownloadHelper.MODEL_FILENAME
     private val _partialResults = MutableSharedFlow<String>(
@@ -21,31 +27,55 @@ class LLMInferenceHelper(val context: Context) {
     )
     val partialResults: SharedFlow<String> = _partialResults.asSharedFlow()
 
-    enum class ModelType {
-        GGUF,      // llama.cpp format
-        TFLITE,    // TensorFlow Lite format
-        UNKNOWN
+    private val _progress = MutableStateFlow(
+        InferenceProgress(
+            stage = Stage.IDLE,
+            current = 0,
+            total = 0,
+            message = "Idle"
+        )
+    )
+    val progress: StateFlow<InferenceProgress> = _progress.asStateFlow()
+
+    enum class Stage {
+        IDLE,
+        LOADING,
+        GENERATING,
+        DONE,
+        ERROR
     }
 
     fun initModel() {
+        updateProgress(stage = Stage.LOADING, current = 0, total = 0, message = "Loading model")
+
         val modelFile = resolveModelFile()
         if (modelFile == null) {
-            Log.e(TAG, "Model file not found in Downloads or internal storage")
-            _partialResults.tryEmit("Error: Model file not found. Place '${ModelDownloadHelper.MODEL_FILENAME}' in Downloads or app internal storage.")
+            val message = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
+            Log.e(TAG, message)
+            _partialResults.tryEmit(message)
+            updateProgress(stage = Stage.ERROR, message = "Error: model file not found")
+            isInitialized = false
             return
         }
 
-        // ファイル拡張子で判定
-        modelType = detectModelType(modelFile)
-        
-        when (modelType) {
-            ModelType.GGUF -> initGGUFModel(modelFile)
-            ModelType.TFLITE -> initTFLiteModel(modelFile)
-            ModelType.UNKNOWN -> {
-                Log.e(TAG, "Unknown model format: ${modelFile.extension}")
-                _partialResults.tryEmit("Error: Unknown model format. Supported: .gguf, .tflite")
-                isInitialized = false
-            }
+        close()
+
+        try {
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(modelFile.absolutePath)
+                .setMaxTokens(MAX_TOTAL_TOKENS)
+                .build()
+
+            llmInference = LlmInference.createFromOptions(context, options)
+            isInitialized = true
+            updateProgress(stage = Stage.IDLE, message = "Model ready")
+            Log.i(TAG, "MediaPipe LLM model initialized successfully")
+            _partialResults.tryEmit("MediaPipe LLM model loaded successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize MediaPipe LLM model", e)
+            _partialResults.tryEmit("Error: failed to initialize MediaPipe LLM model.")
+            updateProgress(stage = Stage.ERROR, message = "Error: failed to initialize model")
+            isInitialized = false
         }
     }
 
@@ -53,152 +83,73 @@ class LLMInferenceHelper(val context: Context) {
         return isInitialized
     }
 
-    private fun detectModelType(modelFile: File): ModelType {
-        return when (modelFile.extension.lowercase()) {
-            "gguf" -> ModelType.GGUF
-            "tflite", "bin" -> ModelType.TFLITE
-            else -> ModelType.UNKNOWN
-        }
-    }
-
-    private fun initGGUFModel(modelFile: File) {
-        try {
-            val nThreads = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
-            val error = nativeInit(modelFile.absolutePath, DEFAULT_CTX, nThreads)
-            if (error != null) {
-                Log.e(TAG, "Failed to initialize GGUF model: $error")
-                _partialResults.tryEmit("Error initializing GGUF model: $error")
-                isInitialized = false
-                return
-            }
-            isInitialized = true
-            Log.i(TAG, "llama.cpp GGUF model initialized successfully")
-            _partialResults.tryEmit("GGUF model loaded successfully!")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize GGUF model", e)
-            _partialResults.tryEmit("Error initializing GGUF model: ${e.message}")
-            isInitialized = false
-        }
-    }
-
-    private fun initTFLiteModel(modelFile: File) {
-        try {
-            val error = nativeInitTFLite(modelFile.absolutePath)
-            if (error != null) {
-                Log.e(TAG, "Failed to initialize TFLite model: $error")
-                _partialResults.tryEmit("Error initializing TFLite model: $error")
-                isInitialized = false
-                return
-            }
-            isInitialized = true
-            Log.i(TAG, "TensorFlow Lite model initialized successfully")
-            _partialResults.tryEmit("TFLite model loaded successfully!")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize TFLite model", e)
-            _partialResults.tryEmit("Error initializing TFLite model: ${e.message}")
-            isInitialized = false
-        }
-    }
-
     fun generateResponse(prompt: String) {
         Log.d(TAG, "=== generateResponse called ===")
-        Log.d(TAG, "isInitialized: $isInitialized, modelType: $modelType")
-        
+        Log.d(TAG, "isInitialized: $isInitialized")
+
         if (!isInitialized) {
             Log.w(TAG, "Model not initialized, attempting to initialize...")
             _partialResults.tryEmit("Model not initialized. Attempting to load...\n")
             initModel()
             if (!isInitialized) {
                 Log.e(TAG, "Failed to initialize model")
-                _partialResults.tryEmit("\nError: Failed to initialize model. Please select a valid GGUF file.")
+                _partialResults.tryEmit("\nError: Failed to initialize MediaPipe LLM model. Please select a valid .bin or .task file.")
                 return
             }
         }
 
-        Log.i(TAG, "Starting background thread for inference")
-        Thread {
-            try {
-                Log.i(TAG, "Thread started - Starting inference with ${modelType.name} model")
-                _partialResults.tryEmit("\n--- LLM Response ---\n")
+        val inference = llmInference
+        if (inference == null) {
+            val errorMsg = "Error: MediaPipe LLM is not available. Please reinitialize the model."
+            Log.e(TAG, errorMsg)
+            _partialResults.tryEmit(errorMsg)
+            updateProgress(stage = Stage.ERROR, message = "Error: model not available")
+            return
+        }
 
-                val effectivePrompt = if (DEBUG_SHORT_PROMPT) {
-                    Log.w(TAG, "DEBUG_SHORT_PROMPT enabled: overriding input prompt")
-                    DEBUG_PROMPT_TEXT
-                } else {
-                    prompt
-                }
-                val effectiveMaxTokens = if (DEBUG_SHORT_PROMPT) DEBUG_MAX_TOKENS else 32
+        lastResultText = ""
+        updateProgress(stage = Stage.GENERATING, current = 0, total = 0, message = "Generating")
+        _partialResults.tryEmit("\n--- MediaPipe LLM Response ---\n")
 
-                Log.d(TAG, "Prompt length: ${effectivePrompt.length} characters")
-                Log.d(TAG, "Calling native generate with max_tokens=$effectiveMaxTokens...")
-                
-                val result = when (modelType) {
-                    ModelType.GGUF -> {
-                        Log.d(TAG, "Calling nativeGenerate...")
-                        val startTime = System.currentTimeMillis()
-                        
-                        // Reduced max tokens for mobile (32 instead of 512)
-                        val response = nativeGenerate(effectivePrompt, effectiveMaxTokens)
-                        
-                        val elapsedTime = System.currentTimeMillis() - startTime
-                        Log.d(TAG, "nativeGenerate returned after ${elapsedTime}ms: ${response.take(100)}...")
-                        
-                        if (response.startsWith("Model is not initialized") || 
-                            response.startsWith("Failed") || 
-                            response.startsWith("Error")) {
-                            Log.e(TAG, "Native generation error: $response")
-                            "Error from llama.cpp:\n$response"
-                        } else {
-                            response
-                        }
-                    }
-                    ModelType.TFLITE -> {
-                        Log.d(TAG, "Calling nativeGenerateTFLite...")
-                        val response = nativeGenerateTFLite(effectivePrompt, effectiveMaxTokens)
-                        if (response.contains("not yet implemented")) {
-                            Log.e(TAG, "TFLite not implemented: $response")
-                            "Error: $response"
-                        } else {
-                            response
-                        }
-                    }
-                    ModelType.UNKNOWN -> {
-                        Log.e(TAG, "Model type is UNKNOWN")
-                        "Error: Model type is unknown. Please reinitialize the model."
-                    }
+        try {
+            val promptLimit = (MAX_TOTAL_TOKENS - OUTPUT_TOKENS_RESERVE).coerceAtLeast(1)
+            val trimmedPrompt = trimPromptToTokenLimit(inference, prompt, promptLimit)
+            val listener = ProgressListener<String> { result, done ->
+                handleResult(result, done)
+                if (!done) {
+                    val tokenCount = estimateTokenCount(inference, result)
+                    updateProgress(
+                        stage = Stage.GENERATING,
+                        current = tokenCount,
+                        total = MAX_TOTAL_TOKENS.toLong(),
+                        message = "Generating"
+                    )
                 }
-                
-                Log.i(TAG, "Emitting result to flow...")
-                val emitted = _partialResults.tryEmit(result)
-                Log.i(TAG, "Result emitted: $emitted")
-                Log.i(TAG, "Inference completed: ${result.take(100)}...")
-            } catch (e: Exception) {
-                val errorMsg = "Error generating response:\n${e.message}\n\nStack trace:\n${e.stackTraceToString()}"
-                Log.e(TAG, "Error generating response", e)
-                _partialResults.tryEmit(errorMsg)
             }
-        }.start()
-        Log.d(TAG, "Background thread started")
+            inference.generateResponseAsync(trimmedPrompt, listener)
+            Log.d(TAG, "MediaPipe LLM generation started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating response", e)
+            _partialResults.tryEmit("Error: failed to generate response.")
+            updateProgress(stage = Stage.ERROR, message = "Error: failed to generate")
+        }
     }
 
     fun close() {
         try {
-            when (modelType) {
-                ModelType.GGUF -> nativeRelease()
-                ModelType.TFLITE -> nativeReleaseTFLite()
-                ModelType.UNKNOWN -> {}
-            }
+            llmInference?.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing model", e)
         }
         isInitialized = false
-        modelType = ModelType.UNKNOWN
+        llmInference = null
+        lastResultText = ""
+        updateProgress(stage = Stage.IDLE, current = 0, total = 0, message = "Idle")
     }
 
     private fun resolveModelFile(): File? {
-        val supportedExtensions = listOf("gguf", "tflite", "bin")
-        
-        // 内部ストレージを優先的に検索
+        val supportedExtensions = listOf("bin", "task")
+
         for (ext in supportedExtensions) {
             val internalFile = File(context.filesDir, "model.$ext")
             if (internalFile.exists()) {
@@ -207,7 +158,6 @@ class LLMInferenceHelper(val context: Context) {
             }
         }
 
-        // Downloads ディレクトリから検索
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         for (ext in supportedExtensions) {
             val downloadsFile = File(downloadsDir, "model.$ext")
@@ -217,9 +167,8 @@ class LLMInferenceHelper(val context: Context) {
             }
         }
 
-        // 古い固定名もチェック（後方互換）
         val legacyFile = File(context.filesDir, modelFilename)
-        if (legacyFile.exists()) {
+        if (legacyFile.exists() && legacyFile.extension.lowercase() in supportedExtensions) {
             Log.i(TAG, "Found legacy model: ${legacyFile.absolutePath}")
             return legacyFile
         }
@@ -227,32 +176,105 @@ class LLMInferenceHelper(val context: Context) {
         return null
     }
 
-    companion object {
-        const val TAG = "LLMInferenceHelper"
-        private const val DEFAULT_CTX = 2048
-        private const val DEFAULT_MAX_TOKENS = 128
-        private const val DEBUG_SHORT_PROMPT = true
-        private const val DEBUG_PROMPT_TEXT = "Hello"
-        private const val DEBUG_MAX_TOKENS = 8
-
-        init {
-            try {
-                System.loadLibrary("llama_jni")
-                Log.i(TAG, "✅ libllama_jni.so loaded successfully")
-            } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "❌ Failed to load libllama_jni.so: ${e.message}", e)
-                throw e
+    private fun handleResult(result: Any?, done: Boolean) {
+        val resultText = extractResultText(result)
+        if (resultText.isNotEmpty()) {
+            val delta = if (resultText.startsWith(lastResultText)) {
+                resultText.substring(lastResultText.length)
+            } else {
+                resultText
             }
+
+            if (delta.isNotEmpty()) {
+                _partialResults.tryEmit(delta)
+            }
+            lastResultText = resultText
+        }
+
+        if (done) {
+            updateProgress(stage = Stage.DONE, message = "Done")
         }
     }
 
-    // ========== GGUF (llama.cpp) JNI Methods ==========
-    private external fun nativeInit(modelPath: String, nCtx: Int, nThreads: Int): String?
-    private external fun nativeGenerate(prompt: String, maxTokens: Int): String
-    private external fun nativeRelease()
+    private fun extractResultText(result: Any?): String {
+        return when (result) {
+            null -> ""
+            is String -> result
+            else -> result.toString()
+        }
+    }
 
-    // ========== TFLite JNI Methods ==========
-    private external fun nativeInitTFLite(modelPath: String): String?
-    private external fun nativeGenerateTFLite(prompt: String, maxTokens: Int): String
-    private external fun nativeReleaseTFLite()
+    private fun estimateTokenCount(inference: LlmInference, text: String): Long {
+        return try {
+            inference.sizeInTokens(text).toLong()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun trimPromptToTokenLimit(
+        inference: LlmInference,
+        prompt: String,
+        maxPromptTokens: Int
+    ): String {
+        if (maxPromptTokens <= 0 || prompt.isEmpty()) return ""
+
+        val fullTokens = inference.sizeInTokens(prompt)
+        if (fullTokens <= maxPromptTokens) {
+            return prompt
+        }
+
+        var low = 0
+        var high = prompt.length
+        var best = 0
+
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val candidate = prompt.substring(0, mid)
+            val tokens = inference.sizeInTokens(candidate)
+            if (tokens <= maxPromptTokens) {
+                best = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        return if (best <= 0) "" else prompt.substring(0, best)
+    }
+
+    private fun updateProgress(
+        stage: Stage? = null,
+        current: Long? = null,
+        total: Long? = null,
+        message: String? = null
+    ) {
+        val previous = _progress.value
+        val resolvedTotal = total?.let { if (it > 0L) it else 0L } ?: previous.total
+        val resolvedMessage = message?.let { sanitizeAscii(it) } ?: previous.message
+
+        _progress.value = InferenceProgress(
+            stage = stage ?: previous.stage,
+            current = current ?: previous.current,
+            total = resolvedTotal,
+            message = resolvedMessage
+        )
+    }
+
+    companion object {
+        const val TAG = "LLMInferenceHelper"
+        private const val MAX_TOTAL_TOKENS = 512
+        private const val OUTPUT_TOKENS_RESERVE = 96
+    }
+
+    private fun sanitizeAscii(message: String): String {
+        return message.map { ch -> if (ch.code in 32..126) ch else '?' }.joinToString("")
+    }
 }
+
+data class InferenceProgress(
+    val stage: LLMInferenceHelper.Stage,
+    val current: Long,
+    val total: Long,
+    val message: String
+)

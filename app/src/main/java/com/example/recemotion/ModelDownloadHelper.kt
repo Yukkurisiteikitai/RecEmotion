@@ -15,12 +15,12 @@ class ModelDownloadHelper(private val context: Context) {
     companion object {
         const val TAG = "ModelDownloadHelper"
 
-        // GGUF model for llama.cpp. Host your own or provide a direct download.
+        // MediaPipe LLM model. Host your own or provide a direct download.
         const val MODEL_URL = ""
-        const val MODEL_FILENAME = "model.gguf"
+        const val MODEL_FILENAME = "model.bin"
     }
 
-    private val supportedExtensions = listOf("gguf", "tflite", "bin")
+    private val supportedExtensions = listOf("bin", "task")
     private val internalModelFile = File(context.filesDir, MODEL_FILENAME)
     private val downloadsModelFile = File(
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),

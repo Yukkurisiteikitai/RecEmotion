@@ -72,13 +72,13 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             
             if (copyModelFromUri(uri)) {
                 binding.txtResult.append("Model file copied successfully.\n")
-                binding.txtResult.append("Initializing llama.cpp...\n")
+                binding.txtResult.append("Initializing MediaPipe LLM...\n")
                 llmInferenceHelper.initModel()
                 Toast.makeText(this, "Model imported and ready.", Toast.LENGTH_SHORT).show()
             } else {
                 binding.txtResult.text = "Failed to import model.\n\n" +
                     "Please ensure:\n" +
-                    "- File is a valid GGUF format\n" +
+                    "- File is a valid MediaPipe LLM model (.bin or .task)\n" +
                     "- File is not corrupted\n" +
                     "- You have sufficient storage space"
                 Toast.makeText(this, "Failed to import model.", Toast.LENGTH_LONG).show()
@@ -138,6 +138,31 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                 }
             }
         }
+
+        // Collect LLM Progress
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                llmInferenceHelper.progress.collect { progress ->
+                    val isActive = progress.stage == LLMInferenceHelper.Stage.LOADING ||
+                        progress.stage == LLMInferenceHelper.Stage.GENERATING
+                    binding.progressContainer.visibility = if (isActive) View.VISIBLE else View.GONE
+
+                    val total = progress.total
+                    if (total > 0L) {
+                        binding.progressBar.isIndeterminate = false
+                        val maxValue = total.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                        val currentValue = progress.current
+                            .coerceAtMost(total)
+                            .coerceAtMost(Int.MAX_VALUE.toLong())
+                            .toInt()
+                        binding.progressBar.max = maxValue
+                        binding.progressBar.progress = currentValue
+                    } else {
+                        binding.progressBar.isIndeterminate = true
+                    }
+                }
+            }
+        }
     }
 
     private fun checkAndDownloadModel() {
@@ -150,16 +175,18 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             android.app.AlertDialog.Builder(this)
                 .setTitle("LLM Model Required")
                 .setMessage("""
-                          This app requires a GGUF model for llama.cpp.
+                          This app requires a MediaPipe LLM model.
 
                           Download Steps:
-                          1. Download a GGUF model that fits your device.
-                          2. Rename it to 'model.gguf'.
+                          1. Download a MediaPipe LLM model that fits your device.
+                          2. Rename it to 'model.task' or 'model.bin'.
                           3. Move it to Downloads on your Android device:
-                              /storage/emulated/0/Download/model.gguf
+                              /storage/emulated/0/Download/model.task
+                              (or /storage/emulated/0/Download/model.bin)
 
                           Alternative: You can still push to internal storage with:
-                              adb push model.gguf /data/data/com.example.recemotion/files/model.gguf
+                              adb push model.task /data/data/com.example.recemotion/files/model.task
+                              (or adb push model.bin /data/data/com.example.recemotion/files/model.bin)
                 """.trimIndent())
                 .setPositiveButton("Select File") { _, _ ->
                     openModelFileLauncher.launch(arrayOf("*/*"))
@@ -176,7 +203,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
                 .setNegativeButton("Copy ADB Command") { _, _ ->
                     val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     val clip = android.content.ClipData.newPlainText("ADB Command", 
-                        "adb push model.gguf /data/data/com.example.recemotion/files/model.gguf")
+                        "adb push model.task /data/data/com.example.recemotion/files/model.task")
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(this, "Command copied to clipboard!", Toast.LENGTH_SHORT).show()
                 }
@@ -212,19 +239,19 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             
             // 拡張子をチェック
             if (!isSupportedModelFormat(fileName)) {
-                val errorMsg = "Unsupported format: $fileName. Supported: .gguf, .tflite, .bin"
+                val errorMsg = "Unsupported format: $fileName. Supported: .bin, .task"
                 Log.e(TAG, errorMsg)
                 runOnUiThread {
                     binding.txtResult.text = "Error: $errorMsg\n\n" +
-                        "For llama.cpp, please select a .gguf file."
+                        "For MediaPipe LLM, please select a .bin or .task file."
                 }
-                Toast.makeText(this, "Unsupported format. Supported: .gguf, .tflite, .bin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Unsupported format. Supported: .bin, .task", Toast.LENGTH_SHORT).show()
                 return false
             }
 
             // 拡張子を保持して固定名にリネーム（内部で複数モデル管理する場合は別途対応）
             val extension = fileName.substringAfterLast(".")
-            val targetFileName = "model.$extension"  // model.gguf, model.tflite など
+            val targetFileName = "model.$extension"  // model.bin, model.task
             val targetFile = java.io.File(filesDir, targetFileName)
             
             Log.i(TAG, "Copying to: ${targetFile.absolutePath}")
@@ -271,7 +298,7 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
 
     private fun isSupportedModelFormat(fileName: String): Boolean {
         val extension = fileName.substringAfterLast(".").lowercase()
-        return extension in listOf("gguf", "tflite", "bin")
+        return extension in listOf("bin", "task")
     }
 
 
@@ -342,11 +369,11 @@ class MainActivity : AppCompatActivity(), FaceLandmarkerHelper.LandmarkerListene
             
             if (!modelInitialized) {
                 binding.txtResult.text = "Error: LLM model is not initialized.\n\n" +
-                    "Please select a GGUF model file using the 'SELECT MODEL' button.\n\n" +
-                    "You can download GGUF models from:\n" +
-                    "- Hugging Face (search for 'gguf')\n" +
-                    "- llama.cpp compatible models\n\n" +
-                    "Recommended: Small models (< 1GB) for mobile devices."
+                    "Please select a MediaPipe LLM model file using the 'SELECT MODEL' button.\n\n" +
+                    "You can download MediaPipe LLM models from:\n" +
+                    "- MediaPipe Tasks examples and model pages\n" +
+                    "- Hugging Face (search for .task or .bin)\n\n" +
+                    "Recommended: Small models (< 1 GB) for mobile devices."
                 Log.e(TAG, "Analysis failed: Model not initialized")
                 return@setOnClickListener
             }
