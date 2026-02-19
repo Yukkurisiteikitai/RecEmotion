@@ -28,6 +28,9 @@ import com.example.recemotion.data.db.AppDatabase
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
 import com.example.recemotion.data.llm.ThoughtPromptBuilder
 import com.example.recemotion.data.parser.CabochaDependencyParser
+import com.example.recemotion.data.parser.DictionaryManager
+import com.example.recemotion.data.parser.NativeCabochaParser
+import com.example.recemotion.data.parser.ParserComparisonLogger
 import com.example.recemotion.data.parser.CabochaThoughtMapper
 import com.example.recemotion.data.repository.ThoughtRepository
 import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
@@ -66,6 +69,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
 
     private var wakeTimeUnix: Long = 0
+
+    // --- Parser 比較 ---
+    private lateinit var dictionaryManager: DictionaryManager
+    private val kuromojiParser = CabochaDependencyParser()
+    private var nativeParser: NativeCabochaParser? = null
 
     // --- Activity Result Launchers ---
 
@@ -142,6 +150,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         collectLlmResults()
         collectLlmProgress()
         collectThoughtAnalysisState()
+
+        // --- 辞書インストール & NativeCabochaParser 初期化 ---
+        dictionaryManager = DictionaryManager(requireContext())
+        viewLifecycleOwner.lifecycleScope.launch {
+            initNativeParser()
+        }
     }
 
     override fun onHiddenChanged(hidden: Boolean) {
@@ -209,10 +223,32 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             binding.txtResult.text = "Analyzing...\n"
             thoughtAnalysisViewModel.analyze(text)
 
+            // 両パーサーで比較実行（Logcat に出力）
+            viewLifecycleOwner.lifecycleScope.launch {
+                ParserComparisonLogger.compare(text, kuromojiParser, nativeParser)
+            }
+
             val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE)
                     as android.view.inputmethod.InputMethodManager
             imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
         }
+    }
+
+    // --- NativeCabochaParser 初期化 ---
+
+    private suspend fun initNativeParser() {
+        if (!dictionaryManager.isInstalled()) {
+            Log.i(TAG, "Installing MeCab dictionary (~51MB)...")
+            dictionaryManager.install()
+            Log.i(TAG, "Dictionary installed: ${dictionaryManager.dictPath}")
+        }
+
+        nativeParser = NativeCabochaParser(mecabDicDir = dictionaryManager.dictPath)
+        val verifyResult = nativeParser!!.nativeVerify(dictionaryManager.dictPath)
+        Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK)")
+
+        // 起動時ベンチマーク（Logcat に出力）
+        ParserComparisonLogger.runBenchmark(kuromojiParser, nativeParser)
     }
 
     // --- Camera Control ---
