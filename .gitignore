@@ -9,3 +9,5 @@
 .externalNativeBuild
 .cxx
 /app/src/main/rust/target
+history
+local.properties
