@@ -24,12 +24,6 @@ android {
             abiFilters += "arm64-v8a"
         }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++11"
-                arguments += listOf("-DANDROID_STL=c++_shared")
-            }
-        }
     }
 
     buildTypes {
@@ -53,13 +47,6 @@ android {
             jniLibs.srcDirs("src/main/jniLibs")
         }
     }
-    // externalNativeBuild {
-    //     cmake {
-    //         path = file("src/main/cpp/CMakeLists.txt")
-    //         version = "3.22.1"
-    //     }
-    // }
-    
     // Kuromoji META-INF ファイル重複を除外
     packaging {
         resources {
