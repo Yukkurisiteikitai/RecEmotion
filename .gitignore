@@ -11,3 +11,5 @@
 /app/src/main/rust/target
 history
 local.properties
+*.txt
+compass_artifact*
