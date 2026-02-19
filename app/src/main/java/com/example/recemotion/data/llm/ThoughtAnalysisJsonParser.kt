@@ -12,7 +12,9 @@ import org.json.JSONObject
 class ThoughtAnalysisJsonParser {
 
     fun parse(jsonText: String): ThoughtAnalysisResult {
-        val root = JSONObject(jsonText)
+        // 問題16 修正: LLM が "Sure! Here is:\n{...}" のように前置きテキストを出力した場合でも
+        // 最初の '{' から最後の '}' を抽出することで JSONException を防ぐ
+        val root = JSONObject(extractJson(jsonText))
         return ThoughtAnalysisResult(
             premises = readStringArray(root.optJSONArray("premises")),
             emotions = readStringArray(root.optJSONArray("emotions")),
@@ -20,6 +22,12 @@ class ThoughtAnalysisJsonParser {
             possibleBiases = readBiases(root.optJSONArray("possibleBiases")),
             missingPerspectives = readMissing(root.optJSONArray("missingPerspectives"))
         )
+    }
+
+    private fun extractJson(text: String): String {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        return if (start >= 0 && end > start) text.substring(start, end + 1) else text
     }
 
     private fun readStringArray(array: JSONArray?): List<String> {

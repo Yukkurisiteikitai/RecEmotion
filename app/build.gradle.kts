@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("org.jetbrains.kotlin.kapt")
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -53,12 +53,24 @@ android {
             jniLibs.srcDirs("src/main/jniLibs")
         }
     }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
+    
+    // Kuromoji META-INF ファイル重複を除外
+    packaging {
+        resources {
+            excludes += listOf(
+                "META-INF/CONTRIBUTORS.md",
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md"
+            )
         }
     }
+    
     buildFeatures {
         viewBinding = true
     }
@@ -80,12 +92,15 @@ dependencies {
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // MediaPipe
     val mediapipeVersion = "0.10.+"
     implementation("com.google.mediapipe:tasks-vision:$mediapipeVersion")
     implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
+
+    // Kuromoji - 日本語形態素解析（JNI不要）
+    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
 
     // CameraX
     val cameraxVersion = "1.3.1"

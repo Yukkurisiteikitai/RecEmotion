@@ -118,15 +118,6 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "Failed to load librecemotion.so: ${e.message}", e)
                 throw e
             }
-            
-            // CaboCha JNI (libcabocha_jni.so) のロード
-            try {
-                System.loadLibrary("cabocha_jni")
-                Log.i(TAG, "libcabocha_jni.so loaded")
-            } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Failed to load libcabocha_jni.so: ${e.message}", e)
-                // CaboChaは必須ではないので、エラーでも継続
-            }
         }
 
         // JNI Bridge: MainScreenFragment から MainActivity.xxx() として呼び出す

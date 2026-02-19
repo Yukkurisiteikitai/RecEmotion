@@ -30,4 +30,7 @@
 /* Android doesn't have iconv in the standard library */
 #define HAVE_ICONV 0
 
+/* Default RC file path - on Android this is set at runtime */
+#define MECAB_DEFAULT_RC ""
+
 #endif /* CONFIG_H_ */

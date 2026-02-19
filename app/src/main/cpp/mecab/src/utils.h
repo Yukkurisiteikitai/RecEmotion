@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -31,8 +32,12 @@ typedef unsigned long long uint64_t;
 #endif  // _MSC_VER
 #else   // _WIN32
 typedef unsigned char uint8_t;
+#ifdef _MSC_VER
+#ifndef __ANDROID__
 typedef unsigned long uint32_t;
 typedef unsigned __int64 uint64_t;
+#endif  // !__ANDROID__
+#endif  // _MSC_VER
 #endif  // _WIN32
 #endif  // HAVE_STDINT_H
 

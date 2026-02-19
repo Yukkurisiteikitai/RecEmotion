@@ -1,8 +1,8 @@
 #include <jni.h>
 #include <string>
 #include <sstream>
+#include "cabocha/src/cabocha.h"
 #include <android/log.h>
-#include "cabocha.h"
 
 #define TAG "CaboCha_JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -27,17 +27,17 @@ Java_com_example_recemotion_data_parser_CabochaDependencyParser_nativeParse(
     
     // CaboCha パーサーの初期化
     // 辞書がない場合はフォールバック用の簡易JSONを返す
-    cabocha::CaboCha* parser = nullptr;
+    CaboCha::Parser* parser = nullptr;
     
     // 辞書パスを試行（後で assets から取得するように拡張可能）
     const char* dict_paths[] = {
-        "/data/local/tmp/mecab/dic",  // テスト用
+        "-d /data/local/tmp/mecab/dic",  // テスト用
         "",  // デフォルト
         nullptr
     };
     
     for (int i = 0; dict_paths[i] != nullptr && parser == nullptr; i++) {
-        parser = cabocha::createCaboCha(dict_paths[i]);
+        parser = CaboCha::createParser(dict_paths[i]);
     }
     
     if (parser == nullptr) {
@@ -52,7 +52,7 @@ Java_com_example_recemotion_data_parser_CabochaDependencyParser_nativeParse(
     }
     
     // パース実行
-    const cabocha::Tree* tree = parser->parse(text);
+    const CaboCha::Tree* tree = parser->parse(text);
     env->ReleaseStringUTFChars(jtext, text);
     
     if (tree == nullptr) {
@@ -66,7 +66,7 @@ Java_com_example_recemotion_data_parser_CabochaDependencyParser_nativeParse(
     json << "{\"chunks\":[";
     
     for (size_t i = 0; i < tree->chunk_size(); ++i) {
-        const cabocha::Chunk* chunk = tree->chunk(i);
+        const CaboCha::Chunk* chunk = tree->chunk(i);
         if (i > 0) json << ",";
         
         json << "{\"id\":" << i 
@@ -80,7 +80,7 @@ Java_com_example_recemotion_data_parser_CabochaDependencyParser_nativeParse(
             : tree->token_size();
         
         for (size_t j = token_start; j < token_end; ++j) {
-            const cabocha::Token* token = tree->token(j);
+            const CaboCha::Token* token = tree->token(j);
             if (j > token_start) json << ",";
             
             // 表層形と品詞を取得
