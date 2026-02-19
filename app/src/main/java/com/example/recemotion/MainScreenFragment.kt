@@ -36,11 +36,19 @@ import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import kotlinx.coroutines.launch
+import com.example.recemotion.data.parser.LogicalFlowAnalyzer
+import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
+import com.example.recemotion.data.parser.LogicalFlowReportBuilder
+import com.example.recemotion.domain.model.QuestionType
+import com.example.recemotion.domain.model.UserResponse
+import com.example.recemotion.domain.model.VerificationQuestion
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.FileOutputStream
 import java.util.Calendar
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.coroutines.resume
 
 /**
  * MAIN画面のFragment。
@@ -182,6 +190,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         // モデル選択ボタン
         binding.btnSelectModel.setOnClickListener {
             openModelFileLauncher.launch(arrayOf("*/*"))
+        }
+
+        // 論理フロー検証ボタン (旧 Kuromoji テスト)
+        binding.btnKuromojiTest.setOnClickListener {
+            showLogicalFlowDialog()
         }
 
         // 解析ボタン
@@ -497,6 +510,149 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 }
             }
         }
+    }
+
+    // --- 論理フロー検証システム (Kuromoji ベース) ---
+
+    /** Step 1: テキスト入力ダイアログを表示 */
+    private fun showLogicalFlowDialog() {
+        val editText = android.widget.EditText(requireContext()).apply {
+            hint = "分析するテキストを入力してください...\n（複数の文でもOK）"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 4
+            setPadding(48, 32, 48, 32)
+        }
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("論理フロー検証システム")
+            .setMessage(
+                "Kuromojiで形態素解析を行い、テキストの論理構造を抽出します。\n" +
+                    "質問への回答を通じて「脳内フロー」との乖離を検出します。"
+            )
+            .setView(editText)
+            .setPositiveButton("解析開始") { _, _ ->
+                val text = editText.text.toString()
+                if (text.isBlank()) {
+                    Toast.makeText(requireContext(), "テキストを入力してください", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                runLogicalFlowVerification(text)
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
+    }
+
+    /** Step 2-5: 論理フロー検証の全フェーズを実行 */
+    private fun runLogicalFlowVerification(text: String) {
+        binding.scrollResult.visibility = View.VISIBLE
+        binding.txtResult.text = "Phase 1 & 2: 論理フロー解析中...\n"
+        binding.progressContainer.visibility = View.VISIBLE
+
+        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE)
+            as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                // ── Phase 1 & 2: Kuromoji 解析 ──────────────────────────────
+                val analyzer = LogicalFlowAnalyzer()
+                val analysis = analyzer.analyze(text)
+                val reportBuilder = LogicalFlowReportBuilder()
+
+                binding.progressContainer.visibility = View.GONE
+                binding.txtResult.text = reportBuilder.buildPhase1Report(analysis)
+                binding.scrollResult.post { binding.scrollResult.fullScroll(View.FOCUS_DOWN) }
+
+                // ── Phase 3 移行確認 ─────────────────────────────────────────
+                val questionGenerator = LogicalFlowQuestionGenerator()
+                val questions = questionGenerator.generateQuestions(analysis)
+
+                val proceed = suspendCancellableCoroutine { cont ->
+                    val msg = if (questions.isEmpty()) {
+                        "解析完了です。\n（テキストが短いか1文のみのため検証質問はありません）"
+                    } else {
+                        "解析完了です。\n${questions.size}件の検証質問に答えて\n「脳内フロー」との乖離を確認しましょう。"
+                    }
+                    val dialog = android.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Phase 3: 検証フェーズ")
+                        .setMessage(msg)
+                        .setPositiveButton(if (questions.isEmpty()) "閉じる" else "質問に答える") { _, _ ->
+                            if (cont.isActive) cont.resume(questions.isNotEmpty())
+                        }
+                        .apply {
+                            if (questions.isNotEmpty()) {
+                                setNegativeButton("スキップ") { _, _ ->
+                                    if (cont.isActive) cont.resume(false)
+                                }
+                            }
+                        }
+                        .setCancelable(false)
+                        .show()
+                    cont.invokeOnCancellation { dialog.dismiss() }
+                }
+
+                if (!proceed) return@launch
+
+                // ── Phase 3: インタラクティブ Q&A ───────────────────────────
+                val userResponses = mutableListOf<UserResponse>()
+                for ((index, question) in questions.withIndex()) {
+                    binding.txtResult.text = buildString {
+                        append(reportBuilder.buildPhase1Report(analysis))
+                        append("\n\n── 質問 ${index + 1}/${questions.size} ──")
+                    }
+                    val selected = showVerificationQuestion(question, index + 1, questions.size)
+                    userResponses.add(
+                        UserResponse(
+                            questionId = question.id,
+                            selectedOption = selected,
+                            questionType = question.type,
+                            relatedSentences = question.relatedSentences
+                        )
+                    )
+                }
+
+                // ── Phase 4 & 5: 乖離分析 + 最終レポート ────────────────────
+                binding.progressContainer.visibility = View.VISIBLE
+                val report = reportBuilder.buildReport(analysis, questions, userResponses)
+                binding.progressContainer.visibility = View.GONE
+
+                binding.txtResult.text = reportBuilder.buildFinalReport(report)
+                binding.scrollResult.post { binding.scrollResult.fullScroll(View.FOCUS_DOWN) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Logical flow verification failed", e)
+                binding.progressContainer.visibility = View.GONE
+                binding.txtResult.text = "エラー: ${e.message}\n\n${e.stackTraceToString()}"
+            }
+        }
+    }
+
+    /**
+     * 検証質問を AlertDialog で表示し、ユーザーが選択した選択肢を返す。
+     * suspendCancellableCoroutine でコルーチンと同期する。
+     */
+    private suspend fun showVerificationQuestion(
+        question: VerificationQuestion,
+        current: Int,
+        total: Int
+    ): String = suspendCancellableCoroutine { cont ->
+        val optionsArray = question.options.toTypedArray()
+        var selectedIndex = 0
+
+        val dialog = android.app.AlertDialog.Builder(requireContext())
+            .setTitle("検証 Q$current/$total  [${question.type.label}]")
+            .setMessage(question.questionText)
+            .setSingleChoiceItems(optionsArray, 0) { _, which ->
+                selectedIndex = which
+            }
+            .setPositiveButton("確認") { _, _ ->
+                if (cont.isActive) cont.resume(question.options[selectedIndex])
+            }
+            .setCancelable(false)
+            .show()
+
+        cont.invokeOnCancellation { dialog.dismiss() }
     }
 
     // --- ViewModel Factory ---
