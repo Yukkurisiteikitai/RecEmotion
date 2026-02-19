@@ -37,7 +37,7 @@ lazy_static! {
     pub static ref GLOBAL_STATE: Mutex<SessionState> = Mutex::new(SessionState::new());
 }
 
-// --- Analysis Logic ---
+// --- Face Emotion Analysis Logic ---
 
 pub fn init_session(wake_time: i64) {
     let mut state = GLOBAL_STATE.lock().unwrap();
