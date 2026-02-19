@@ -24,6 +24,22 @@ android {
             abiFilters += "arm64-v8a"
         }
 
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++11", "-fexceptions", "-frtti")
+                arguments(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_ABI=arm64-v8a"
+                )
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
