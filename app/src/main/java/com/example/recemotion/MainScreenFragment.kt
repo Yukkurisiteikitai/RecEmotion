@@ -243,9 +243,16 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             Log.i(TAG, "Dictionary installed: ${dictionaryManager.dictPath}")
         }
 
-        nativeParser = NativeCabochaParser(mecabDicDir = dictionaryManager.dictPath)
-        val verifyResult = nativeParser!!.nativeVerify(dictionaryManager.dictPath)
-        Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK)")
+        val parser = NativeCabochaParser(mecabDicDir = dictionaryManager.dictPath)
+        val verifyResult = parser.nativeVerify(dictionaryManager.dictPath)
+        Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK, 1=init失敗, 2=parse失敗)")
+
+        if (verifyResult == 0) {
+            nativeParser = parser
+        } else {
+            nativeParser = null
+            Log.e(TAG, "NativeCabochaParser unavailable (code=$verifyResult)")
+        }
 
         // 起動時ベンチマーク（Logcat に出力）
         ParserComparisonLogger.runBenchmark(kuromojiParser, nativeParser)
@@ -560,10 +567,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             setPadding(48, 32, 48, 32)
         }
 
+        val parserLabel = if (nativeParser != null) "CaboCha（NDK）" else "Kuromoji（フォールバック）"
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("論理フロー検証システム")
             .setMessage(
-                "Kuromojiで形態素解析を行い、テキストの論理構造を抽出します。\n" +
+                "${parserLabel}でテキストの論理構造を抽出します。\n" +
                     "質問への回答を通じて「脳内フロー」との乖離を検出します。"
             )
             .setView(editText)
@@ -591,8 +599,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                // ── Phase 1 & 2: Kuromoji 解析 ──────────────────────────────
-                val analyzer = LogicalFlowAnalyzer()
+                // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
+                val analyzer = LogicalFlowAnalyzer(nativeParser)
                 val analysis = analyzer.analyze(text)
                 val reportBuilder = LogicalFlowReportBuilder()
 

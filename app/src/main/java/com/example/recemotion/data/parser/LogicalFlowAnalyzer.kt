@@ -15,12 +15,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Kuromojiを使った論理フロー解析エンジン。
+ * 論理フロー解析エンジン。
  *
- * Phase 1: 各文の形態素解析 → 主語・述語・目的語・時間マーカー・エンティティを抽出
+ * [nativeParser] が null の場合は Kuromoji（形態素ベース）で解析する。
+ * [nativeParser] が渡された場合は NativeCabochaParser（チャンクベース）で解析する。
+ *
+ * Phase 1: 各文の解析 → 主語・述語・目的語・時間マーカー・エンティティを抽出
  * Phase 2: 文間の論理関係（時系列/因果/対比/継続/具体例）を接続詞から検出
  */
-class LogicalFlowAnalyzer {
+class LogicalFlowAnalyzer(
+    private val nativeParser: NativeCabochaParser? = null
+) {
 
     private val tokenizer by lazy { Tokenizer() }
 
@@ -91,13 +96,118 @@ class LogicalFlowAnalyzer {
 
     suspend fun analyze(text: String): LogicalFlowAnalysis = withContext(Dispatchers.Default) {
         val rawSentences = splitSentences(text)
-        Log.d(TAG, "Split into ${rawSentences.size} sentences")
+        Log.d(TAG, "Split into ${rawSentences.size} sentences (parser=${if (nativeParser != null) "CaboCha" else "Kuromoji"})")
 
-        val analyzed = rawSentences.mapIndexed { idx, s -> analyzeSentence(idx, s) }
+        val analyzed = if (nativeParser != null) {
+            analyzeWithNative(rawSentences)
+        } else {
+            rawSentences.mapIndexed { idx, s -> analyzeSentence(idx, s) }
+        }
         val relations = detectRelations(analyzed, rawSentences)
         val overallFlow = buildOverallFlow(analyzed)
 
         LogicalFlowAnalysis(analyzed, relations, overallFlow)
+    }
+
+    // ─── NativeCabochaParser（チャンクベース）解析 ──────────────────────
+
+    private suspend fun analyzeWithNative(sentences: List<String>): List<AnalyzedSentence> {
+        return sentences.mapIndexed { idx, s ->
+            try {
+                val result = nativeParser!!.parse(s)
+                val morphemes = result.chunks.flatMap { chunk ->
+                    chunk.tokens.map { token ->
+                        MorphemeInfo(
+                            surface = token.surface,
+                            pos    = token.pos,
+                            pos2   = "",           // NativeCabochaParser は pos2 を持たない
+                            baseForm = token.surface
+                        )
+                    }
+                }
+                AnalyzedSentence(
+                    sentenceId  = idx,
+                    originalText = s,
+                    morphemes   = morphemes,
+                    structure   = SentenceStructure(
+                        subject = extractSubjectFromChunks(result.chunks),
+                        verb    = extractVerbFromChunks(result.chunks),
+                        obj     = extractObjectFromChunks(result.chunks)
+                    ),
+                    timeMarkers = detectTimeMarkersFromChunks(result.chunks),
+                    entities    = extractEntitiesFromChunks(result.chunks)
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to analyze sentence $idx with native parser: ${e.message}")
+                AnalyzedSentence(
+                    sentenceId = idx, originalText = s,
+                    morphemes = emptyList(),
+                    structure = SentenceStructure("", "", ""),
+                    timeMarkers = emptyList(), entities = emptyList()
+                )
+            }
+        }
+    }
+
+    /** チャンク内で は/が の直前にあるトークン列を主語として返す */
+    private fun extractSubjectFromChunks(chunks: List<CabochaChunk>): String {
+        for (chunk in chunks) {
+            for (i in 1 until chunk.tokens.size) {
+                val tok = chunk.tokens[i]
+                if (tok.pos == "助詞" && tok.surface in setOf("は", "が")) {
+                    return chunk.tokens.take(i).joinToString("") { it.surface }
+                }
+            }
+        }
+        return ""
+    }
+
+    /** ROOT チャンク（link=-1）の末尾動詞トークンを述語として返す */
+    private fun extractVerbFromChunks(chunks: List<CabochaChunk>): String {
+        val root = chunks.firstOrNull { it.link == -1 } ?: return ""
+        return root.tokens.lastOrNull { it.pos == "動詞" }?.surface
+            ?: root.tokens.lastOrNull()?.surface
+            ?: ""
+    }
+
+    /** チャンク内で を の直前にあるトークン列を目的語として返す */
+    private fun extractObjectFromChunks(chunks: List<CabochaChunk>): String {
+        for (chunk in chunks) {
+            for (i in 1 until chunk.tokens.size) {
+                val tok = chunk.tokens[i]
+                if (tok.surface == "を" && tok.pos == "助詞") {
+                    return chunk.tokens.take(i).joinToString("") { it.surface }
+                }
+            }
+        }
+        return ""
+    }
+
+    private fun detectTimeMarkersFromChunks(chunks: List<CabochaChunk>): List<String> =
+        chunks.flatMap { chunk ->
+            chunk.tokens.filter { it.surface in TIME_MARKERS }.map { it.surface }
+        }.distinct()
+
+    private fun extractEntitiesFromChunks(chunks: List<CabochaChunk>): List<EntityInfo> {
+        val entities = mutableListOf<EntityInfo>()
+        val seen = mutableSetOf<String>()
+        for (chunk in chunks) {
+            for (token in chunk.tokens) {
+                val surface = token.surface
+                if (surface in seen) continue
+                when {
+                    surface in PERSON_PRONOUNS -> {
+                        entities.add(EntityInfo(EntityType.PERSON, surface))
+                        seen.add(surface)
+                    }
+                    token.pos == "動詞" -> {
+                        entities.add(EntityInfo(EntityType.ACTION, surface))
+                        seen.add(surface)
+                    }
+                }
+            }
+        }
+        return entities
     }
 
     // ─── 文分割 ────────────────────────────────────────────────────
