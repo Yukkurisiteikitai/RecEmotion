@@ -28,6 +28,7 @@ import com.example.recemotion.data.db.AppDatabase
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
 import com.example.recemotion.data.llm.ThoughtPromptBuilder
 import com.example.recemotion.data.parser.CabochaDependencyParser
+import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
 import com.example.recemotion.data.parser.NativeCabochaParser
 import com.example.recemotion.data.parser.ParserComparisonLogger
@@ -72,6 +73,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     // --- Parser 比較 ---
     private lateinit var dictionaryManager: DictionaryManager
+    private lateinit var cabochaModelManager: CabochaModelManager
     private val kuromojiParser = CabochaDependencyParser()
     private var nativeParser: NativeCabochaParser? = null
 
@@ -151,8 +153,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         collectLlmProgress()
         collectThoughtAnalysisState()
 
-        // --- 辞書インストール & NativeCabochaParser 初期化 ---
+        // --- 辞書・モデルインストール & NativeCabochaParser 初期化 ---
         dictionaryManager = DictionaryManager(requireContext())
+        cabochaModelManager = CabochaModelManager(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
             initNativeParser()
         }
@@ -243,9 +246,28 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             Log.i(TAG, "Dictionary installed: ${dictionaryManager.dictPath}")
         }
 
-        nativeParser = NativeCabochaParser(mecabDicDir = dictionaryManager.dictPath)
-        val verifyResult = nativeParser!!.nativeVerify(dictionaryManager.dictPath)
-        Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK)")
+        if (!cabochaModelManager.isInstalled()) {
+            Log.i(TAG, "Installing CaboCha models (~81MB)...")
+            cabochaModelManager.install()
+            Log.i(TAG, "CaboCha models installed: ${cabochaModelManager.modelPath}")
+        }
+
+        val parser = NativeCabochaParser(
+            mecabDicDir = dictionaryManager.dictPath,
+            cabochaModelDir = cabochaModelManager.modelPath
+        )
+        val verifyResult = parser.nativeVerify(
+            dictionaryManager.dictPath,
+            cabochaModelManager.modelPath
+        )
+        Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK, 1=init失敗, 2=parse失敗)")
+
+        if (verifyResult == 0) {
+            nativeParser = parser
+        } else {
+            nativeParser = null
+            Log.e(TAG, "NativeCabochaParser unavailable (code=$verifyResult)")
+        }
 
         // 起動時ベンチマーク（Logcat に出力）
         ParserComparisonLogger.runBenchmark(kuromojiParser, nativeParser)
@@ -560,10 +582,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             setPadding(48, 32, 48, 32)
         }
 
+        val parserLabel = if (nativeParser != null) "CaboCha（NDK）" else "Kuromoji（フォールバック）"
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("論理フロー検証システム")
             .setMessage(
-                "Kuromojiで形態素解析を行い、テキストの論理構造を抽出します。\n" +
+                "${parserLabel}でテキストの論理構造を抽出します。\n" +
                     "質問への回答を通じて「脳内フロー」との乖離を検出します。"
             )
             .setView(editText)
@@ -591,8 +614,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                // ── Phase 1 & 2: Kuromoji 解析 ──────────────────────────────
-                val analyzer = LogicalFlowAnalyzer()
+                // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
+                val analyzer = LogicalFlowAnalyzer(nativeParser)
                 val analysis = analyzer.analyze(text)
                 val reportBuilder = LogicalFlowReportBuilder()
 

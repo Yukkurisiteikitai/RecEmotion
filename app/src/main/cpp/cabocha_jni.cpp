@@ -27,9 +27,9 @@ extern "C" {
 /**
  * CaboCha で文字列を解析し JSON を返す。
  *
- * @param jMecabDicDir  MeCab 辞書ディレクトリのパス（filesDir 以下にコピーしたもの）
- * @param jCabochaModel CaboCha モデルファイルのパス（""なら内蔵モデル）
- * @param jtext         解析対象テキスト
+ * @param jMecabDicDir    MeCab 辞書ディレクトリのパス（filesDir 以下にコピーしたもの）
+ * @param jCabochaModelDir CaboCha モデルディレクトリのパス（dep.ipa.model 等を含む）
+ * @param jtext           解析対象テキスト
  * @return JSON 文字列 { "chunks": [...] }
  */
 JNIEXPORT jstring JNICALL
@@ -54,14 +54,16 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeParse(
     LOGI("nativeParse: mecabDic=%s, text_len=%zu", mecabDicDir, strlen(text));
 
     // CaboCha 初期化引数を組み立て
-    std::string args = "-r /dev/null";
+    // -m: dep model, -M: chunk model, -d: MeCab 辞書
+    std::string args;
     if (mecabDicDir && mecabDicDir[0] != '\0') {
         args += " -d ";
         args += mecabDicDir;
     }
     if (cabochaModel && cabochaModel[0] != '\0') {
-        args += " -P ";
-        args += cabochaModel;
+        std::string modelDir(cabochaModel);
+        args += " -m " + modelDir + "/dep.ipa.model";
+        args += " -M " + modelDir + "/chunk.ipa.model";
     }
 
     CaboCha::Parser* parser = nullptr;
@@ -140,22 +142,30 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeParse(
 }
 
 /**
- * CaboCha が使用可能か検証する（辞書ロードテスト）。
+ * CaboCha が使用可能か検証する（辞書・モデルロードテスト）。
  * @return 0=OK, 1=init失敗, 2=parse失敗
  */
 JNIEXPORT jint JNICALL
 Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeVerify(
     JNIEnv* env,
     jobject,
-    jstring jMecabDicDir)
+    jstring jMecabDicDir,
+    jstring jCabochaModelDir)
 {
-    const char* mecabDicDir = env->GetStringUTFChars(jMecabDicDir, nullptr);
+    const char* mecabDicDir    = env->GetStringUTFChars(jMecabDicDir,      nullptr);
+    const char* cabochaModelDir = env->GetStringUTFChars(jCabochaModelDir, nullptr);
 
-    std::string args = "-r /dev/null";
+    std::string args;
     if (mecabDicDir && mecabDicDir[0] != '\0') {
         args += " -d ";
         args += mecabDicDir;
     }
+    if (cabochaModelDir && cabochaModelDir[0] != '\0') {
+        std::string modelDir(cabochaModelDir);
+        args += " -m " + modelDir + "/dep.ipa.model";
+        args += " -M " + modelDir + "/chunk.ipa.model";
+    }
+    env->ReleaseStringUTFChars(jCabochaModelDir, cabochaModelDir);
 
     CaboCha::Parser* parser = nullptr;
     try {
@@ -165,7 +175,7 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeVerify(
     env->ReleaseStringUTFChars(jMecabDicDir, mecabDicDir);
 
     if (!parser) {
-        LOGE("nativeVerify: parser init failed");
+        LOGE("nativeVerify: parser init failed (args=%s)", args.c_str());
         return 1;
     }
 

@@ -14,7 +14,7 @@ import org.json.JSONObject
  */
 class NativeCabochaParser(
     private val mecabDicDir: String,
-    private val cabochaModelPath: String = ""
+    private val cabochaModelDir: String = ""
 ) : DependencyParser {
 
     companion object {
@@ -37,8 +37,8 @@ class NativeCabochaParser(
         text: String
     ): String
 
-    /** 辞書ロードが成功するか検証する。0=OK, 1=init失敗, 2=parse失敗 */
-    external fun nativeVerify(mecabDicDir: String): Int
+    /** 辞書・モデルロードが成功するか検証する。0=OK, 1=init失敗, 2=parse失敗 */
+    external fun nativeVerify(mecabDicDir: String, cabochaModelDir: String): Int
 
     override suspend fun parse(text: String): CabochaResult = withContext(Dispatchers.Default) {
         if (text.isBlank()) return@withContext CabochaResult()
@@ -46,7 +46,7 @@ class NativeCabochaParser(
         Log.d(TAG, "nativeParse: length=${text.length}, dic=$mecabDicDir")
 
         val json = try {
-            nativeParse(mecabDicDir, cabochaModelPath, text)
+            nativeParse(mecabDicDir, cabochaModelDir, text)
         } catch (e: UnsatisfiedLinkError) {
             Log.e(TAG, "JNI not available: ${e.message}")
             return@withContext CabochaResult()
