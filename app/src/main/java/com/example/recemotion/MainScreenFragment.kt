@@ -28,6 +28,7 @@ import com.example.recemotion.data.db.AppDatabase
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
 import com.example.recemotion.data.llm.ThoughtPromptBuilder
 import com.example.recemotion.data.parser.CabochaDependencyParser
+import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
 import com.example.recemotion.data.parser.NativeCabochaParser
 import com.example.recemotion.data.parser.ParserComparisonLogger
@@ -72,6 +73,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     // --- Parser 比較 ---
     private lateinit var dictionaryManager: DictionaryManager
+    private lateinit var cabochaModelManager: CabochaModelManager
     private val kuromojiParser = CabochaDependencyParser()
     private var nativeParser: NativeCabochaParser? = null
 
@@ -151,8 +153,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         collectLlmProgress()
         collectThoughtAnalysisState()
 
-        // --- 辞書インストール & NativeCabochaParser 初期化 ---
+        // --- 辞書・モデルインストール & NativeCabochaParser 初期化 ---
         dictionaryManager = DictionaryManager(requireContext())
+        cabochaModelManager = CabochaModelManager(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
             initNativeParser()
         }
@@ -243,8 +246,20 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             Log.i(TAG, "Dictionary installed: ${dictionaryManager.dictPath}")
         }
 
-        val parser = NativeCabochaParser(mecabDicDir = dictionaryManager.dictPath)
-        val verifyResult = parser.nativeVerify(dictionaryManager.dictPath)
+        if (!cabochaModelManager.isInstalled()) {
+            Log.i(TAG, "Installing CaboCha models (~81MB)...")
+            cabochaModelManager.install()
+            Log.i(TAG, "CaboCha models installed: ${cabochaModelManager.modelPath}")
+        }
+
+        val parser = NativeCabochaParser(
+            mecabDicDir = dictionaryManager.dictPath,
+            cabochaModelDir = cabochaModelManager.modelPath
+        )
+        val verifyResult = parser.nativeVerify(
+            dictionaryManager.dictPath,
+            cabochaModelManager.modelPath
+        )
         Log.i(TAG, "NativeCabochaParser verify: $verifyResult (0=OK, 1=init失敗, 2=parse失敗)")
 
         if (verifyResult == 0) {
