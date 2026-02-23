@@ -30,7 +30,7 @@ class AnalyzeThoughtUseCase(
     private val serializer: ThoughtStructureJsonAdapter
 ) {
 
-    fun execute(text: String): Flow<ThoughtAnalysisUiState> = channelFlow {
+    fun execute(text: String, entryId: Long? = null): Flow<ThoughtAnalysisUiState> = channelFlow {
         if (text.isBlank()) {
             send(ThoughtAnalysisUiState(error = "Input is empty"))
             return@channelFlow
@@ -66,11 +66,22 @@ class AnalyzeThoughtUseCase(
                     val timestamp = System.currentTimeMillis()
                     withContext(Dispatchers.IO) {
                         val treeJson = serializer.toJson(structure)
-                        val entryId = repository.storeEntry(text, treeJson, timestamp)
+                        val finalEntryId = if (entryId != null) {
+                            val existing = repository.getEntryById(entryId)
+                            if (existing != null) {
+                                repository.updateEntry(existing.copy(treeJson = treeJson))
+                                entryId
+                            } else {
+                                repository.storeEntry(null, text, treeJson, timestamp)
+                            }
+                        } else {
+                            repository.storeEntry(null, text, treeJson, timestamp)
+                        }
+
                         val resultJson = runCatching {
                             JSONObject(event.fullText).toString()
                         }.getOrElse { event.fullText }
-                        repository.storeAnalysis(entryId, resultJson, timestamp)
+                        repository.storeAnalysis(finalEntryId, resultJson, timestamp)
                     }
                     send(
                         ThoughtAnalysisUiState(

@@ -13,3 +13,4 @@ history
 local.properties
 *.txt
 compass_artifact*
+.claude

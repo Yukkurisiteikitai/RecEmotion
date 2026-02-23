@@ -100,7 +100,9 @@ class LLMInferenceHelper(val context: Context) {
 
                 if (inference == null) {
                     Log.w(TAG, "4/5 [initModel] model_load: createFromOptions returned null")
-                    updateProgress(stage = Stage.ERROR, message = "Error: model init returned null")
+                    val msg = "Error: MediaPipe model init returned null (unsupported format?)"
+                    _partialResults.tryEmit(msg)
+                    updateProgress(stage = Stage.ERROR, message = "Error: model init null")
                     isInitialized = false
                     return@launch
                 }
@@ -114,7 +116,8 @@ class LLMInferenceHelper(val context: Context) {
             } catch (e: Exception) {
                 if (!isActive) return@launch
                 Log.e(TAG, "4/5 [initModel] model_load: FAILED", e)
-                _partialResults.tryEmit("Error: failed to initialize MediaPipe LLM model.")
+                val msg = "Error: Failed to initialize MediaPipe LLM model.\n${e.localizedMessage ?: "Unknown error"}"
+                _partialResults.tryEmit(msg)
                 updateProgress(stage = Stage.ERROR, message = "Error: failed to initialize model")
                 isInitialized = false
             }
