@@ -23,4 +23,7 @@ interface ConversationTopicDao {
 
     @Query("SELECT * FROM conversation_topics WHERE id = :id")
     suspend fun getTopicById(id: Long): ConversationTopicEntity?
+
+    @Query("UPDATE conversation_topics SET is_resolved = 1, resolution_result = :result, updated_at = :updatedAt WHERE id = :id")
+    suspend fun resolveTopic(id: Long, result: String, updatedAt: Long)
 }

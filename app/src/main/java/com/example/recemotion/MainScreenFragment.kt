@@ -131,9 +131,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         llmInferenceHelper = LLMInferenceHelper(requireContext())
         modelDownloadHelper = ModelDownloadHelper(requireContext())
         thoughtAnalysisViewModel = createThoughtAnalysisViewModel()
-        conversationAdapter = ConversationAdapter { item ->
-            thoughtAnalysisViewModel.generateToDo(item)
-        }
+        conversationAdapter = ConversationAdapter(
+            onGenerateToDo = { item -> thoughtAnalysisViewModel.generateToDo(item) },
+            onToggleToDo = { id, completed -> thoughtAnalysisViewModel.toggleToDo(id, completed) },
+            onResolveTopic = { topicId -> showResolveTopicDialog(topicId) }
+        )
 
         setupUI()
 
@@ -575,9 +577,39 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             .setTitle("話題の解決確認")
             .setMessage("新しい話題に移ったようです。前の話題はスッキリ解決しましたか？")
             .setPositiveButton("解決した") { _, _ ->
-                Toast.makeText(requireContext(), "議題を「解決済み」としてマークしました", Toast.LENGTH_SHORT).show()
+                // Note: ideally we'd know which topic ID, but for now we assume the active one
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val db = AppDatabase.getInstance(requireContext())
+                    val active = db.conversationTopicDao().getActiveTopic()
+                    active?.let { showResolveTopicDialog(it.id) }
+                }
             }
             .setNegativeButton("まだ途中", null)
+            .show()
+    }
+
+    private fun showResolveTopicDialog(topicId: Long) {
+        val editText = android.widget.EditText(requireContext()).apply {
+            hint = "この議題の結論や、ToDoを実行した結果を記入してください。"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 3
+            setPadding(48, 32, 48, 32)
+        }
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("議題の完結")
+            .setMessage("ToDoの結果や最終的な気づきを入力して、この議題を完了させましょう。")
+            .setView(editText)
+            .setPositiveButton("完了") { _, _ ->
+                val result = editText.text.toString()
+                if (result.isNotBlank()) {
+                    thoughtAnalysisViewModel.resolveTopic(topicId, result)
+                } else {
+                    Toast.makeText(requireContext(), "結果を入力してください", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("キャンセル", null)
             .show()
     }
 

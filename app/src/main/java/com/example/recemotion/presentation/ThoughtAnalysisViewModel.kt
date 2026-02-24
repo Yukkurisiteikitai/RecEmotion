@@ -44,15 +44,25 @@ class ThoughtAnalysisViewModel(
             combine(
                 db.conversationTopicDao().getAllTopics(),
                 db.thoughtEntryDao().getAllEntries(),
+                db.todoDao().getAllToDos(),
                 _uiState
-            ) { topics, entries, state ->
+            ) { topics, entries, allTodos, state ->
                 val items = mutableListOf<ConversationDisplayItem>()
                 
                 // Add system logs at the top
                 items.addAll(state.systemLogs)
 
                 for (topic in topics) {
-                    items.add(ConversationDisplayItem.TopicHeader(topic.id, topic.title))
+                    items.add(ConversationDisplayItem.TopicHeader(topic.id, topic.title, topic.isResolved))
+                    
+                    // Filter ToDos for this topic
+                    val topicTodos = allTodos.filter { it.topicId == topic.id }
+                    for (todo in topicTodos) {
+                        items.add(ConversationDisplayItem.ToDoItem(
+                            todo.id, todo.topicId, todo.description, todo.isCompleted, todo.resultNotes
+                        ))
+                    }
+
                     val topicEntries = entries.filter { it.topicId == topic.id }
                     for (entry in topicEntries) {
                         val analysis = db.thoughtAnalysisDao().getAnalysisForEntry(entry.id)
@@ -60,6 +70,14 @@ class ThoughtAnalysisViewModel(
                             runCatching { jsonParser.parse(it.analysisJson) }.getOrNull()
                         }
                         items.add(ConversationDisplayItem.ThoughtAnalysis(entry.id, entry.rawText, result))
+                    }
+
+                    if (topic.isResolved && !topic.resolutionResult.isNullOrBlank()) {
+                        items.add(ConversationDisplayItem.SystemMessage(
+                            id = topic.id * -1, // Unique enough for display
+                            message = "RESOLVED: ${topic.resolutionResult}",
+                            isError = false
+                        ))
                     }
                 }
                 items
@@ -79,7 +97,7 @@ class ThoughtAnalysisViewModel(
     fun analyze(text: String) {
         analyzeJob?.cancel()
         analyzeJob = viewModelScope.launch {
-            _uiState.value = ThoughtAnalysisUiState(isAnalyzing = true)
+            _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
 
             manageConversationUseCase.processInput(text).collect { event ->
                 when (event) {
@@ -135,6 +153,8 @@ class ThoughtAnalysisViewModel(
         val result = item.result ?: return
         if (result.assumptions.isEmpty()) return
 
+        val topicId = _uiState.value.currentTopicId ?: return
+
         viewModelScope.launch {
             pushSystemMessage("Generating To-Do list to verify assumptions...")
             
@@ -143,26 +163,48 @@ class ThoughtAnalysisViewModel(
             }
             
             val prompt = """
-You are a coach. Based on the following potential assumptions and their verification goals, generate a concrete, actionable To-Do list (maximum 3 items) for the user to verify if these assumptions are true or false.
+You are a coach. Based on the following potential assumptions and their verification goals, generate concrete, actionable To-Do tasks (maximum 3 items) for the user to verify if these assumptions are true or false.
+Each task should be a single line starting with "- ".
 
 Assumptions:
 $assumptionsText
 
-Output format:
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+Output:
+- [Task description]
 """.trimIndent()
 
             analyzeThoughtUseCase.execute(prompt).collect { state ->
-                if (state.finalResult != null || state.partialStreamingText.isNotBlank()) {
-                    // We reuse system message or a specific To-Do item type
-                    // For now, let's push as a system message when done
-                }
                 if (!state.isAnalyzing && state.partialStreamingText.isNotBlank()) {
-                    pushSystemMessage("Verification Plan:\n${state.partialStreamingText}")
+                    val lines = state.partialStreamingText.lines()
+                        .filter { it.trim().startsWith("-") }
+                        .map { it.trim().removePrefix("-").trim() }
+                    
+                    for (line in lines) {
+                        db.todoDao().insertToDo(com.example.recemotion.data.db.ToDoEntity(
+                            topicId = topicId,
+                            description = line,
+                            createdAt = System.currentTimeMillis()
+                        ))
+                    }
+                    pushSystemMessage("Generated ${lines.size} tasks for this topic.")
                 }
             }
+        }
+    }
+
+    fun toggleToDo(todoId: Long, isCompleted: Boolean) {
+        viewModelScope.launch {
+            val todos = _historyItems.value.filterIsInstance<ConversationDisplayItem.ToDoItem>()
+            val item = todos.find { it.id == todoId } ?: return@launch
+            
+            db.todoDao().updateToDoStatus(todoId, isCompleted)
+        }
+    }
+
+    fun resolveTopic(topicId: Long, resolution: String) {
+        viewModelScope.launch {
+            db.conversationTopicDao().resolveTopic(topicId, resolution, System.currentTimeMillis())
+            pushSystemMessage("Topic resolved: $resolution")
         }
     }
 }

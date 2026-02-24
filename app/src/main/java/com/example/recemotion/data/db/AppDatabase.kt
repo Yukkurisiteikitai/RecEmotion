@@ -9,9 +9,10 @@ import androidx.room.RoomDatabase
     entities = [
         ThoughtEntryEntity::class,
         ThoughtAnalysisEntity::class,
-        ConversationTopicEntity::class
+        ConversationTopicEntity::class,
+        ToDoEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -19,6 +20,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun thoughtEntryDao(): ThoughtEntryDao
     abstract fun thoughtAnalysisDao(): ThoughtAnalysisDao
     abstract fun conversationTopicDao(): ConversationTopicDao
+    abstract fun todoDao(): ToDoDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
