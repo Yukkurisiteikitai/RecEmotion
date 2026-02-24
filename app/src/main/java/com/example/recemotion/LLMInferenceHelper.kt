@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import com.example.recemotion.data.llm.LlmStreamEvent
+import com.example.recemotion.domain.model.LlmStreamEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

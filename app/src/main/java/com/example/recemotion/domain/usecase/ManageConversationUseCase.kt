@@ -1,30 +1,22 @@
 package com.example.recemotion.domain.usecase
 
 import android.util.Log
-import com.example.recemotion.LLMInferenceHelper
-import com.example.recemotion.data.db.ConversationTopicDao
-import com.example.recemotion.data.db.ConversationTopicEntity
-import com.example.recemotion.data.db.ThoughtAnalysisDao
-import com.example.recemotion.data.db.ThoughtAnalysisEntity
-import com.example.recemotion.data.db.ThoughtEntryDao
-import com.example.recemotion.data.db.ThoughtEntryEntity
-import com.example.recemotion.data.llm.LlmStreamEvent
-import com.example.recemotion.data.parser.LogicalFlowAnalyzer
-import com.example.recemotion.data.parser.TopicChangeDetector
-import kotlinx.coroutines.Dispatchers
+import com.example.recemotion.domain.model.LlmStreamEvent
+import com.example.recemotion.domain.repository.ThoughtRepository
+import com.example.recemotion.domain.service.LLMInferenceService
+import com.example.recemotion.domain.service.LogicalFlowService
+import com.example.recemotion.domain.service.TopicChangeService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import javax.inject.Inject
 
-class ManageConversationUseCase(
-    private val topicDao: ConversationTopicDao,
-    private val entryDao: ThoughtEntryDao,
-    private val analysisDao: ThoughtAnalysisDao,
-    private val flowAnalyzer: LogicalFlowAnalyzer,
-    private val topicChangeDetector: TopicChangeDetector,
-    private val llmHelper: LLMInferenceHelper
+class ManageConversationUseCase @Inject constructor(
+    private val repository: ThoughtRepository,
+    private val flowService: LogicalFlowService,
+    private val topicChangeService: TopicChangeService,
+    private val llmService: LLMInferenceService
 ) {
     companion object {
         private const val TAG = "ManageConversationUseCase"
@@ -35,28 +27,27 @@ class ManageConversationUseCase(
 
         send(ConversationUpdateEvent.Analyzing("Starting Analysis..."))
 
-        // 1. Structural Analysis (Cabocha)
-        val currentFlow = flowAnalyzer.analyze(text)
-        val activeTopic = topicDao.getActiveTopic()
-        
+        // 1. Structural analysis
+        val currentFlow = flowService.analyze(text)
+        val activeTopic = repository.getActiveTopic()
+
         var isNewTopic = activeTopic == null
         var suggestedTitle = "New Topic"
 
         if (activeTopic != null) {
-            // Get last entry to compare
-            // Note: In a real app, we might want to compare with a summary of the whole topic
-            val lastEntry = entryDao.getEntriesByTopic(activeTopic.id).first().firstOrNull()
-            val lastFlow = lastEntry?.let { flowAnalyzer.analyze(it.rawText) }
-            
-            val structuralScore = topicChangeDetector.evaluateStructuralChange(currentFlow, lastFlow)
+            val lastEntry = repository.getLatestEntryForTopic(activeTopic.id)
+            val lastFlow = lastEntry?.let { flowService.analyze(it.rawText) }
+
+            val structuralScore = topicChangeService.evaluateStructuralChange(currentFlow, lastFlow)
             Log.d(TAG, "Structural Change Score: $structuralScore")
 
-            // 2. Semantic Analysis (LLM) if structural change is ambiguous or high
+            // 2. Semantic analysis (LLM) when structural change is ambiguous
             if (structuralScore > 0.4) {
                 send(ConversationUpdateEvent.Analyzing("Evaluating topic shift..."))
-                val prompt = topicChangeDetector.buildTopicChangePrompt(text, lastEntry?.rawText ?: "")
-                val llmResult = llmHelper.analyzeThoughtStructure(prompt).first { it is LlmStreamEvent.Done } as LlmStreamEvent.Done
-                
+                val prompt = topicChangeService.buildTopicChangePrompt(text, lastEntry?.rawText ?: "")
+                val llmResult = llmService.analyzeThoughtStructure(prompt)
+                    .first { it is LlmStreamEvent.Done } as LlmStreamEvent.Done
+
                 try {
                     val json = JSONObject(llmResult.fullText)
                     isNewTopic = json.getBoolean("is_new_topic")
@@ -68,34 +59,22 @@ class ManageConversationUseCase(
             }
         }
 
-        // 3. Update Database
+        // 3. Persist to database via repository
         val timestamp = System.currentTimeMillis()
         val finalTopicId = if (isNewTopic) {
-            val newTopic = ConversationTopicEntity(
-                title = suggestedTitle,
-                createdAt = timestamp,
-                updatedAt = timestamp
-            )
-            topicDao.insertTopic(newTopic)
+            repository.insertTopic(suggestedTitle, timestamp)
         } else {
             activeTopic!!.id
         }
 
-        // Store Entry
-        val entryId = entryDao.insertEntry(
-            ThoughtEntryEntity(
-                topicId = finalTopicId,
-                rawText = text,
-                treeJson = "{}", // Placeholder for now
-                createdAt = timestamp
-            )
+        val entryId = repository.storeEntry(
+            topicId = finalTopicId,
+            rawText = text,
+            treeJson = "{}",
+            timestamp = timestamp
         )
 
-        // Update Topic's updatedAt
-        val topicToUpdate = topicDao.getTopicById(finalTopicId)
-        if (topicToUpdate != null) {
-            topicDao.updateTopic(topicToUpdate.copy(updatedAt = timestamp))
-        }
+        repository.updateTopicTimestamp(finalTopicId, timestamp)
 
         send(ConversationUpdateEvent.Done(finalTopicId, isNewTopic, entryId))
     }

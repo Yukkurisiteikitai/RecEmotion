@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import com.example.recemotion.databinding.ActivityMainBinding
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * アプリのエントリーポイント。
@@ -19,6 +20,7 @@ import com.example.recemotion.databinding.ActivityMainBinding
  * JNI (Rust連携) の宣言もここに置く。
  * Rustの関数名 (Java_com_example_recemotion_MainActivity_xxx) を変えないため。
  */
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding

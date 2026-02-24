@@ -2,11 +2,12 @@ package com.example.recemotion.data.llm
 
 import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
+import javax.inject.Inject
 
 /**
  * Builds a strict JSON-only prompt for thought analysis.
  */
-class ThoughtPromptBuilder {
+class ThoughtPromptBuilder @Inject constructor() {
 
     fun build(structure: ThoughtStructure): String {
         val treeText = buildIndentedText(structure)

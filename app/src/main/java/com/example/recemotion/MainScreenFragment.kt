@@ -19,33 +19,28 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.recemotion.data.db.AppDatabase
-import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
-import com.example.recemotion.data.llm.ThoughtPromptBuilder
 import com.example.recemotion.data.parser.CabochaDependencyParser
 import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
-import com.example.recemotion.data.parser.NativeCabochaParser
-import com.example.recemotion.data.parser.ParserComparisonLogger
-import com.example.recemotion.data.parser.CabochaThoughtMapper
-import com.example.recemotion.data.repository.ThoughtRepository
-import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
-import com.example.recemotion.databinding.FragmentMainScreenBinding
-import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
-import com.example.recemotion.presentation.ThoughtAnalysisViewModel
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
-import kotlinx.coroutines.launch
 import com.example.recemotion.data.parser.LogicalFlowAnalyzer
 import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
 import com.example.recemotion.data.parser.LogicalFlowReportBuilder
+import com.example.recemotion.data.parser.NativeCabochaParser
+import com.example.recemotion.data.parser.ParserComparisonLogger
+import com.example.recemotion.databinding.FragmentMainScreenBinding
+import com.example.recemotion.domain.model.LlmStage
 import com.example.recemotion.domain.model.QuestionType
 import com.example.recemotion.domain.model.UserResponse
 import com.example.recemotion.domain.model.VerificationQuestion
+import com.example.recemotion.presentation.ConversationAdapter
+import com.example.recemotion.presentation.ThoughtAnalysisViewModel
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.FileOutputStream
@@ -54,15 +49,11 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
-import com.example.recemotion.data.parser.TopicChangeDetector
-import com.example.recemotion.domain.usecase.ManageConversationUseCase
-import com.example.recemotion.domain.usecase.SystemDiagnosticUseCase
-import com.example.recemotion.presentation.ConversationAdapter
-
 /**
  * MAIN画面のFragment。
  * カメラ・顔感情検出・LLM解析・コントロールUIを担当する。
  */
+@AndroidEntryPoint
 class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     private var _binding: FragmentMainScreenBinding? = null
@@ -70,9 +61,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     private lateinit var faceLandmarkerHelper: FaceLandmarkerHelper
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var llmInferenceHelper: LLMInferenceHelper
     private lateinit var modelDownloadHelper: ModelDownloadHelper
-    private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
+    private val thoughtAnalysisViewModel: ThoughtAnalysisViewModel by viewModels()
     private lateinit var conversationAdapter: ConversationAdapter
 
     private var wakeTimeUnix: Long = 0
@@ -107,7 +97,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             if (copyModelFromUri(uri)) {
                 thoughtAnalysisViewModel.pushSystemMessage("Model file copied successfully.")
                 thoughtAnalysisViewModel.pushSystemMessage("Initializing MediaPipe LLM...")
-                llmInferenceHelper.initModel()
+                thoughtAnalysisViewModel.initModel()
                 Toast.makeText(requireContext(), "Model imported and ready.", Toast.LENGTH_SHORT).show()
             } else {
                 val errorMsg = "Failed to import model. Please ensure it is a valid MediaPipe LLM model (.bin or .task)."
@@ -128,9 +118,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         faceLandmarkerHelper = FaceLandmarkerHelper(context = requireContext(), faceLandmarkerHelperListener = this)
-        llmInferenceHelper = LLMInferenceHelper(requireContext())
         modelDownloadHelper = ModelDownloadHelper(requireContext())
-        thoughtAnalysisViewModel = createThoughtAnalysisViewModel()
         conversationAdapter = ConversationAdapter(
             onGenerateToDo = { item -> thoughtAnalysisViewModel.generateToDo(item) },
             onToggleToDo = { id, completed -> thoughtAnalysisViewModel.toggleToDo(id, completed) },
@@ -179,7 +167,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         super.onDestroyView()
         cameraExecutor.shutdown()
         faceLandmarkerHelper.clearFaceLandmarker()
-        llmInferenceHelper.close()
         _binding = null
     }
 
@@ -407,7 +394,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 }
                 .setNeutralButton("I've Downloaded It") { _, _ ->
                     if (modelDownloadHelper.isModelDownloaded()) {
-                        llmInferenceHelper.initModel()
+                        thoughtAnalysisViewModel.initModel()
                         Toast.makeText(requireContext(), "Model found! Ready to analyze.", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Model not found. Please follow the instructions.", Toast.LENGTH_LONG).show()
@@ -426,7 +413,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 .setCancelable(false)
                 .show()
         } else {
-            llmInferenceHelper.initModel()
+            thoughtAnalysisViewModel.initModel()
         }
     }
 
@@ -497,7 +484,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private fun collectLlmResults() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                llmInferenceHelper.partialResults.collect { part ->
+                thoughtAnalysisViewModel.partialResults.collect { part ->
                     thoughtAnalysisViewModel.pushSystemMessage(part)
                 }
             }
@@ -507,9 +494,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private fun collectLlmProgress() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                llmInferenceHelper.progress.collect { progress ->
-                    val isActive = progress.stage == LLMInferenceHelper.Stage.LOADING ||
-                        progress.stage == LLMInferenceHelper.Stage.GENERATING
+                thoughtAnalysisViewModel.progress.collect { progress ->
+                    val isActive = progress.stage == LlmStage.LOADING ||
+                        progress.stage == LlmStage.GENERATING
                     binding.progressContainer.visibility = if (isActive) View.VISIBLE else View.GONE
 
                     val total = progress.total
@@ -573,16 +560,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     }
 
     private fun showResolutionConfirmDialog() {
+        val topicId = thoughtAnalysisViewModel.uiState.value.currentTopicId ?: return
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("話題の解決確認")
             .setMessage("新しい話題に移ったようです。前の話題はスッキリ解決しましたか？")
             .setPositiveButton("解決した") { _, _ ->
-                // Note: ideally we'd know which topic ID, but for now we assume the active one
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val db = AppDatabase.getInstance(requireContext())
-                    val active = db.conversationTopicDao().getActiveTopic()
-                    active?.let { showResolveTopicDialog(it.id) }
-                }
+                showResolveTopicDialog(topicId)
             }
             .setNegativeButton("まだ途中", null)
             .show()
@@ -662,8 +645,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 val reportBuilder = LogicalFlowReportBuilder()
 
                 binding.progressContainer.visibility = View.GONE
-                // Note: Historical flow verification still uses Log for result now,
-                // but ideally it should also be added to RecyclerView
                 Log.d(TAG, reportBuilder.buildPhase1Report(analysis))
 
                 // ── Phase 3 移行確認 ─────────────────────────────────────────
@@ -750,54 +731,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             .show()
 
         cont.invokeOnCancellation { dialog.dismiss() }
-    }
-
-    // --- ViewModel Factory ---
-
-    private fun createThoughtAnalysisViewModel(): ThoughtAnalysisViewModel {
-        val db = AppDatabase.getInstance(requireContext())
-        val repository = ThoughtRepository(
-            db.thoughtEntryDao(),
-            db.thoughtAnalysisDao(),
-            db.conversationTopicDao()
-        )
-        
-        val analyzeUseCase = AnalyzeThoughtUseCase(
-            parser = CabochaDependencyParser(),
-            mapper = CabochaThoughtMapper(),
-            promptBuilder = ThoughtPromptBuilder(),
-            llmHelper = llmInferenceHelper,
-            jsonParser = ThoughtAnalysisJsonParser(),
-            repository = repository,
-            serializer = ThoughtStructureJsonAdapter()
-        )
-
-        val manageUseCase = ManageConversationUseCase(
-            topicDao = db.conversationTopicDao(),
-            entryDao = db.thoughtEntryDao(),
-            analysisDao = db.thoughtAnalysisDao(),
-            flowAnalyzer = LogicalFlowAnalyzer(nativeParser),
-            topicChangeDetector = TopicChangeDetector(),
-            llmHelper = llmInferenceHelper
-        )
-
-        val diagnosticUseCase = SystemDiagnosticUseCase(
-            requireContext(),
-            DictionaryManager(requireContext()),
-            CabochaModelManager(requireContext())
-        )
-
-        val factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                if (modelClass.isAssignableFrom(ThoughtAnalysisViewModel::class.java)) {
-                    @Suppress("UNCHECKED_CAST")
-                    return ThoughtAnalysisViewModel(analyzeUseCase, manageUseCase, diagnosticUseCase, db) as T
-                }
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-        }
-
-        return ViewModelProvider(this, factory)[ThoughtAnalysisViewModel::class.java]
     }
 
     companion object {

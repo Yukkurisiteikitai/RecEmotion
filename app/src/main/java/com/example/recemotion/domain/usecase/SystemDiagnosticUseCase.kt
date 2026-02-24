@@ -1,42 +1,40 @@
 package com.example.recemotion.domain.usecase
 
 import android.content.Context
-import com.example.recemotion.LLMInferenceHelper
 import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
-import com.example.recemotion.presentation.ConversationDisplayItem
+import com.example.recemotion.domain.model.DiagnosticMessage
 import java.io.File
 
-class SystemDiagnosticUseCase(
-    private val context: Context,
+class SystemDiagnosticUseCase @javax.inject.Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
     private val dictionaryManager: DictionaryManager,
     private val cabochaModelManager: CabochaModelManager
 ) {
-    fun runDiagnostic(): List<ConversationDisplayItem.SystemMessage> {
-        val logs = mutableListOf<ConversationDisplayItem.SystemMessage>()
-        var id = System.nanoTime()
+    fun runDiagnostic(): List<DiagnosticMessage> {
+        val logs = mutableListOf<DiagnosticMessage>()
 
         // 1. MeCab Dictionary
         if (dictionaryManager.isInstalled()) {
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "✅ MeCab Dictionary: Installed"))
+            logs.add(DiagnosticMessage("✅ MeCab Dictionary: Installed"))
         } else {
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "❌ MeCab Dictionary: Missing", isError = true))
+            logs.add(DiagnosticMessage("❌ MeCab Dictionary: Missing", isError = true))
         }
 
         // 2. CaboCha Models
         if (cabochaModelManager.isInstalled()) {
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "✅ CaboCha Models: Installed"))
+            logs.add(DiagnosticMessage("✅ CaboCha Models: Installed"))
         } else {
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "❌ CaboCha Models: Missing", isError = true))
+            logs.add(DiagnosticMessage("❌ CaboCha Models: Missing", isError = true))
         }
 
         // 3. MediaPipe LLM Model
         val modelFile = resolveModelFile()
         if (modelFile != null) {
             val sizeMB = modelFile.length() / (1024 * 1024)
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "✅ MediaPipe LLM: Found (${sizeMB}MB)"))
+            logs.add(DiagnosticMessage("✅ MediaPipe LLM: Found (${sizeMB}MB)"))
         } else {
-            logs.add(ConversationDisplayItem.SystemMessage(id++, "⚠️ MediaPipe LLM: Not found in internal storage or Downloads", isError = true))
+            logs.add(DiagnosticMessage("⚠️ MediaPipe LLM: Not found in internal storage or Downloads", isError = true))
         }
 
         return logs

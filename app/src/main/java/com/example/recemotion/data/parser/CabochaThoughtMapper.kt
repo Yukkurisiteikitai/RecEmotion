@@ -3,11 +3,12 @@ package com.example.recemotion.data.parser
 import android.util.Log
 import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
+import javax.inject.Inject
 
 /**
  * Maps CaboCha output into a tree structure.
  */
-class CabochaThoughtMapper {
+class CabochaThoughtMapper @Inject constructor() {
 
     fun map(result: CabochaResult): ThoughtStructure {
         if (result.chunks.isEmpty()) {

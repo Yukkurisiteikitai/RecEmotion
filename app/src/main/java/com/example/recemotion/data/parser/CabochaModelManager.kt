@@ -18,7 +18,9 @@ import java.io.File
  *   assets/cabocha_model/dep.ipa.model    (~41MB)
  *   assets/cabocha_model/ne.ipa.model     (~20MB)
  */
-class CabochaModelManager(private val context: Context) {
+class CabochaModelManager @javax.inject.Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
+) {
 
     companion object {
         private const val TAG = "CabochaModelManager"

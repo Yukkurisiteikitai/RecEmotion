@@ -24,7 +24,9 @@ import java.io.File
  *   assets/ipadic/sys.dic
  *   assets/ipadic/unk.dic
  */
-class DictionaryManager(private val context: Context) {
+class DictionaryManager @javax.inject.Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
+) {
 
     companion object {
         private const val TAG = "DictionaryManager"

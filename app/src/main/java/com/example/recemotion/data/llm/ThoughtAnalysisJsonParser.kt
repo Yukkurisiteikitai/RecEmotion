@@ -6,11 +6,12 @@ import com.example.recemotion.domain.model.MissingPerspective
 import com.example.recemotion.domain.model.ThoughtAnalysisResult
 import org.json.JSONArray
 import org.json.JSONObject
+import javax.inject.Inject
 
 /**
  * Parses the strict JSON response from the LLM.
  */
-class ThoughtAnalysisJsonParser {
+class ThoughtAnalysisJsonParser @Inject constructor() {
 
     fun parse(jsonText: String): ThoughtAnalysisResult {
         val root = JSONObject(extractJson(jsonText))
