@@ -1,7 +1,7 @@
 package com.example.recemotion
 
 import android.util.Log
-import com.example.recemotion.data.llm.LlmStreamEvent
+import com.example.recemotion.domain.model.LlmStreamEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 

@@ -4,11 +4,12 @@ import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
 import org.json.JSONArray
 import org.json.JSONObject
+import javax.inject.Inject
 
 /**
  * Serializes ThoughtStructure to JSON for storage.
  */
-class ThoughtStructureJsonAdapter {
+class ThoughtStructureJsonAdapter @Inject constructor() {
 
     fun toJson(structure: ThoughtStructure): String {
         val root = JSONObject()

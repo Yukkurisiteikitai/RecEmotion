@@ -19,33 +19,28 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.recemotion.data.db.AppDatabase
-import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
-import com.example.recemotion.data.llm.ThoughtPromptBuilder
 import com.example.recemotion.data.parser.CabochaDependencyParser
 import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
-import com.example.recemotion.data.parser.NativeCabochaParser
-import com.example.recemotion.data.parser.ParserComparisonLogger
-import com.example.recemotion.data.parser.CabochaThoughtMapper
-import com.example.recemotion.data.repository.ThoughtRepository
-import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
-import com.example.recemotion.databinding.FragmentMainScreenBinding
-import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
-import com.example.recemotion.presentation.ThoughtAnalysisViewModel
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
-import kotlinx.coroutines.launch
 import com.example.recemotion.data.parser.LogicalFlowAnalyzer
 import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
 import com.example.recemotion.data.parser.LogicalFlowReportBuilder
+import com.example.recemotion.data.parser.NativeCabochaParser
+import com.example.recemotion.data.parser.ParserComparisonLogger
+import com.example.recemotion.databinding.FragmentMainScreenBinding
+import com.example.recemotion.domain.model.LlmStage
 import com.example.recemotion.domain.model.QuestionType
 import com.example.recemotion.domain.model.UserResponse
 import com.example.recemotion.domain.model.VerificationQuestion
+import com.example.recemotion.presentation.ConversationAdapter
+import com.example.recemotion.presentation.ThoughtAnalysisViewModel
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.FileOutputStream
@@ -58,6 +53,7 @@ import kotlin.coroutines.resume
  * MAIN画面のFragment。
  * カメラ・顔感情検出・LLM解析・コントロールUIを担当する。
  */
+@AndroidEntryPoint
 class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     private var _binding: FragmentMainScreenBinding? = null
@@ -65,9 +61,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     private lateinit var faceLandmarkerHelper: FaceLandmarkerHelper
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var llmInferenceHelper: LLMInferenceHelper
     private lateinit var modelDownloadHelper: ModelDownloadHelper
-    private lateinit var thoughtAnalysisViewModel: ThoughtAnalysisViewModel
+    private val thoughtAnalysisViewModel: ThoughtAnalysisViewModel by viewModels()
+    private lateinit var conversationAdapter: ConversationAdapter
 
     private var wakeTimeUnix: Long = 0
 
@@ -95,20 +91,17 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri == null) return@registerForActivityResult
 
-            binding.scrollResult.visibility = View.VISIBLE
-            binding.txtResult.text = "Loading model...\n"
+            binding.recyclerConversation.visibility = View.VISIBLE
+            thoughtAnalysisViewModel.pushSystemMessage("Loading model...")
 
             if (copyModelFromUri(uri)) {
-                binding.txtResult.append("Model file copied successfully.\n")
-                binding.txtResult.append("Initializing MediaPipe LLM...\n")
-                llmInferenceHelper.initModel()
+                thoughtAnalysisViewModel.pushSystemMessage("Model file copied successfully.")
+                thoughtAnalysisViewModel.pushSystemMessage("Initializing MediaPipe LLM...")
+                thoughtAnalysisViewModel.initModel()
                 Toast.makeText(requireContext(), "Model imported and ready.", Toast.LENGTH_SHORT).show()
             } else {
-                binding.txtResult.text = "Failed to import model.\n\n" +
-                    "Please ensure:\n" +
-                    "- File is a valid MediaPipe LLM model (.bin or .task)\n" +
-                    "- File is not corrupted\n" +
-                    "- You have sufficient storage space"
+                val errorMsg = "Failed to import model. Please ensure it is a valid MediaPipe LLM model (.bin or .task)."
+                thoughtAnalysisViewModel.pushSystemMessage(errorMsg, isError = true)
                 Toast.makeText(requireContext(), "Failed to import model.", Toast.LENGTH_LONG).show()
             }
         }
@@ -125,9 +118,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
         faceLandmarkerHelper = FaceLandmarkerHelper(context = requireContext(), faceLandmarkerHelperListener = this)
-        llmInferenceHelper = LLMInferenceHelper(requireContext())
         modelDownloadHelper = ModelDownloadHelper(requireContext())
-        thoughtAnalysisViewModel = createThoughtAnalysisViewModel()
+        conversationAdapter = ConversationAdapter(
+            onGenerateToDo = { item -> thoughtAnalysisViewModel.generateToDo(item) },
+            onToggleToDo = { id, completed -> thoughtAnalysisViewModel.toggleToDo(id, completed) },
+            onResolveTopic = { topicId -> showResolveTopicDialog(topicId) }
+        )
 
         setupUI()
 
@@ -152,6 +148,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         collectLlmResults()
         collectLlmProgress()
         collectThoughtAnalysisState()
+        collectHistoryItems()
 
         // --- 辞書・モデルインストール & NativeCabochaParser 初期化 ---
         dictionaryManager = DictionaryManager(requireContext())
@@ -170,13 +167,14 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         super.onDestroyView()
         cameraExecutor.shutdown()
         faceLandmarkerHelper.clearFaceLandmarker()
-        llmInferenceHelper.close()
         _binding = null
     }
 
     // --- UI Setup ---
 
     private fun setupUI() {
+        binding.recyclerConversation.adapter = conversationAdapter
+
         // 起床時刻ピッカー
         binding.btnSetWakeTime.setOnClickListener {
             val cal = Calendar.getInstance()
@@ -222,9 +220,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 return@setOnClickListener
             }
 
-            binding.scrollResult.visibility = View.VISIBLE
-            binding.txtResult.text = "Analyzing...\n"
+            binding.recyclerConversation.visibility = View.VISIBLE
             thoughtAnalysisViewModel.analyze(text)
+            binding.edtReflection.setText("")
 
             // 両パーサーで比較実行（Logcat に出力）
             viewLifecycleOwner.lifecycleScope.launch {
@@ -396,7 +394,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 }
                 .setNeutralButton("I've Downloaded It") { _, _ ->
                     if (modelDownloadHelper.isModelDownloaded()) {
-                        llmInferenceHelper.initModel()
+                        thoughtAnalysisViewModel.initModel()
                         Toast.makeText(requireContext(), "Model found! Ready to analyze.", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Model not found. Please follow the instructions.", Toast.LENGTH_LONG).show()
@@ -415,7 +413,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 .setCancelable(false)
                 .show()
         } else {
-            llmInferenceHelper.initModel()
+            thoughtAnalysisViewModel.initModel()
         }
     }
 
@@ -430,9 +428,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             if (!isSupportedModelFormat(fileName)) {
                 val errorMsg = "Unsupported format: $fileName. Supported: .bin, .task"
                 Log.e(TAG, errorMsg)
-                requireActivity().runOnUiThread {
-                    binding.txtResult.text = "Error: $errorMsg\n\nFor MediaPipe LLM, please select a .bin or .task file."
-                }
                 Toast.makeText(requireContext(), "Unsupported format. Supported: .bin, .task", Toast.LENGTH_SHORT).show()
                 return false
             }
@@ -458,9 +453,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy model file", e)
-            requireActivity().runOnUiThread {
-                binding.txtResult.text = "Error copying model file:\n${e.message}\n\nStack trace:\n${e.stackTraceToString()}"
-            }
             false
         }
     }
@@ -492,11 +484,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private fun collectLlmResults() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                llmInferenceHelper.partialResults.collect { part ->
-                    binding.txtResult.append(part)
-                    binding.scrollResult.post {
-                        binding.scrollResult.fullScroll(View.FOCUS_DOWN)
-                    }
+                thoughtAnalysisViewModel.partialResults.collect { part ->
+                    thoughtAnalysisViewModel.pushSystemMessage(part)
                 }
             }
         }
@@ -505,9 +494,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private fun collectLlmProgress() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                llmInferenceHelper.progress.collect { progress ->
-                    val isActive = progress.stage == LLMInferenceHelper.Stage.LOADING ||
-                        progress.stage == LLMInferenceHelper.Stage.GENERATING
+                thoughtAnalysisViewModel.progress.collect { progress ->
+                    val isActive = progress.stage == LlmStage.LOADING ||
+                        progress.stage == LlmStage.GENERATING
                     binding.progressContainer.visibility = if (isActive) View.VISIBLE else View.GONE
 
                     val total = progress.total
@@ -533,41 +522,78 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 thoughtAnalysisViewModel.uiState.collect { state ->
                     if (state.isAnalyzing) {
-                        binding.scrollResult.visibility = View.VISIBLE
+                        binding.recyclerConversation.visibility = View.VISIBLE
                         binding.progressContainer.visibility = View.VISIBLE
                     }
 
                     state.error?.let { error ->
-                        binding.scrollResult.visibility = View.VISIBLE
                         binding.progressContainer.visibility = View.GONE
-                        binding.txtResult.text = "Error: $error"
+                        Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show()
                     }
 
-                    if (state.partialStreamingText.isNotBlank()) {
-                        binding.scrollResult.visibility = View.VISIBLE
-                        binding.txtResult.text = state.partialStreamingText
-                        binding.scrollResult.post {
-                            binding.scrollResult.fullScroll(View.FOCUS_DOWN)
-                        }
+                    if (state.isNewTopicDetected) {
+                        Toast.makeText(requireContext(), "新しい話題が始まりました：${state.topicTitle ?: "未定義"}", Toast.LENGTH_LONG).show()
+                        showResolutionConfirmDialog()
+                        thoughtAnalysisViewModel.dismissTopicNotification()
                     }
 
-                    state.finalResult?.let { result ->
+                    if (state.finalResult != null) {
                         binding.progressContainer.visibility = View.GONE
-                        val summary = buildString {
-                            append("\n--- Thought Analysis ---\n")
-                            append("Premises: ").append(result.premises.joinToString())
-                            append("\nEmotions: ").append(result.emotions.joinToString())
-                            append("\nInferences: ").append(result.inferences.joinToString())
-                            append("\nPossible Biases: ")
-                            append(result.possibleBiases.joinToString { it.name })
-                            append("\nMissing Perspectives: ")
-                            append(result.missingPerspectives.joinToString { it.description })
-                        }
-                        binding.txtResult.append(summary)
                     }
                 }
             }
         }
+    }
+
+    private fun collectHistoryItems() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                thoughtAnalysisViewModel.historyItems.collect { items ->
+                    conversationAdapter.submitList(items) {
+                        if (items.isNotEmpty()) {
+                            binding.recyclerConversation.smoothScrollToPosition(items.size - 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showResolutionConfirmDialog() {
+        val topicId = thoughtAnalysisViewModel.uiState.value.currentTopicId ?: return
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("話題の解決確認")
+            .setMessage("新しい話題に移ったようです。前の話題はスッキリ解決しましたか？")
+            .setPositiveButton("解決した") { _, _ ->
+                showResolveTopicDialog(topicId)
+            }
+            .setNegativeButton("まだ途中", null)
+            .show()
+    }
+
+    private fun showResolveTopicDialog(topicId: Long) {
+        val editText = android.widget.EditText(requireContext()).apply {
+            hint = "この議題の結論や、ToDoを実行した結果を記入してください。"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 3
+            setPadding(48, 32, 48, 32)
+        }
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("議題の完結")
+            .setMessage("ToDoの結果や最終的な気づきを入力して、この議題を完了させましょう。")
+            .setView(editText)
+            .setPositiveButton("完了") { _, _ ->
+                val result = editText.text.toString()
+                if (result.isNotBlank()) {
+                    thoughtAnalysisViewModel.resolveTopic(topicId, result)
+                } else {
+                    Toast.makeText(requireContext(), "結果を入力してください", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
     }
 
     // --- 論理フロー検証システム (Kuromoji ベース) ---
@@ -604,8 +630,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     /** Step 2-5: 論理フロー検証の全フェーズを実行 */
     private fun runLogicalFlowVerification(text: String) {
-        binding.scrollResult.visibility = View.VISIBLE
-        binding.txtResult.text = "Phase 1 & 2: 論理フロー解析中...\n"
+        binding.recyclerConversation.visibility = View.VISIBLE
         binding.progressContainer.visibility = View.VISIBLE
 
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE)
@@ -620,8 +645,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 val reportBuilder = LogicalFlowReportBuilder()
 
                 binding.progressContainer.visibility = View.GONE
-                binding.txtResult.text = reportBuilder.buildPhase1Report(analysis)
-                binding.scrollResult.post { binding.scrollResult.fullScroll(View.FOCUS_DOWN) }
+                Log.d(TAG, reportBuilder.buildPhase1Report(analysis))
 
                 // ── Phase 3 移行確認 ─────────────────────────────────────────
                 val questionGenerator = LogicalFlowQuestionGenerator()
@@ -656,10 +680,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 // ── Phase 3: インタラクティブ Q&A ───────────────────────────
                 val userResponses = mutableListOf<UserResponse>()
                 for ((index, question) in questions.withIndex()) {
-                    binding.txtResult.text = buildString {
-                        append(reportBuilder.buildPhase1Report(analysis))
-                        append("\n\n── 質問 ${index + 1}/${questions.size} ──")
-                    }
                     val selected = showVerificationQuestion(question, index + 1, questions.size)
                     userResponses.add(
                         UserResponse(
@@ -676,13 +696,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 val report = reportBuilder.buildReport(analysis, questions, userResponses)
                 binding.progressContainer.visibility = View.GONE
 
-                binding.txtResult.text = reportBuilder.buildFinalReport(report)
-                binding.scrollResult.post { binding.scrollResult.fullScroll(View.FOCUS_DOWN) }
+                Log.d(TAG, reportBuilder.buildFinalReport(report))
 
             } catch (e: Exception) {
                 Log.e(TAG, "Logical flow verification failed", e)
                 binding.progressContainer.visibility = View.GONE
-                binding.txtResult.text = "エラー: ${e.message}\n\n${e.stackTraceToString()}"
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -712,34 +731,6 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             .show()
 
         cont.invokeOnCancellation { dialog.dismiss() }
-    }
-
-    // --- ViewModel Factory ---
-
-    private fun createThoughtAnalysisViewModel(): ThoughtAnalysisViewModel {
-        val db = AppDatabase.getInstance(requireContext())
-        val repository = ThoughtRepository(db.thoughtEntryDao(), db.thoughtAnalysisDao())
-        val useCase = AnalyzeThoughtUseCase(
-            parser = CabochaDependencyParser(),
-            mapper = CabochaThoughtMapper(),
-            promptBuilder = ThoughtPromptBuilder(),
-            llmHelper = llmInferenceHelper,
-            jsonParser = ThoughtAnalysisJsonParser(),
-            repository = repository,
-            serializer = ThoughtStructureJsonAdapter()
-        )
-
-        val factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                if (modelClass.isAssignableFrom(ThoughtAnalysisViewModel::class.java)) {
-                    @Suppress("UNCHECKED_CAST")
-                    return ThoughtAnalysisViewModel(useCase) as T
-                }
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-        }
-
-        return ViewModelProvider(this, factory)[ThoughtAnalysisViewModel::class.java]
     }
 
     companion object {

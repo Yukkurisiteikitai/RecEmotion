@@ -2,16 +2,17 @@ package com.example.recemotion.data.llm
 
 import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
+import javax.inject.Inject
 
 /**
  * Builds a strict JSON-only prompt for thought analysis.
  */
-class ThoughtPromptBuilder {
+class ThoughtPromptBuilder @Inject constructor() {
 
     fun build(structure: ThoughtStructure): String {
         val treeText = buildIndentedText(structure)
         return """
-You are an analysis engine.
+You are an analysis engine. Analyze the following ThoughtTree and categorize the findings.
 Return ONLY JSON. Do not include extra text.
 
 ThoughtTree:
@@ -19,9 +20,16 @@ $treeText
 
 Output JSON schema:
 {
-  "premises": [],
-  "emotions": [],
-  "inferences": [],
+  "premises": ["fundamental starting points"],
+  "emotions": ["detected emotional states"],
+  "statedFacts": ["explicitly mentioned facts in the text"],
+  "assumptions": [
+    {
+      "text": "underlying belief or prediction not explicitly stated",
+      "importance": 1-5,
+      "verificationGoal": "what to ask or do to verify this assumption"
+    }
+  ],
   "possibleBiases": [],
   "missingPerspectives": []
 }

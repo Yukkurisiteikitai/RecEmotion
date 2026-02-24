@@ -24,7 +24,7 @@ import com.atilika.kuromoji.ipadic.Tokenizer
  *   ├── 今日は  (link → でした。)
  *   └── 良い天気 (link → でした。)
  */
-class CabochaDependencyParser : DependencyParser {
+class CabochaDependencyParser @javax.inject.Inject constructor() : DependencyParser {
 
     private val tokenizer by lazy { Tokenizer() }
 

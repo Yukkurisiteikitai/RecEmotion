@@ -6,14 +6,21 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [ThoughtEntryEntity::class, ThoughtAnalysisEntity::class],
-    version = 1,
+    entities = [
+        ThoughtEntryEntity::class,
+        ThoughtAnalysisEntity::class,
+        ConversationTopicEntity::class,
+        ToDoEntity::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun thoughtEntryDao(): ThoughtEntryDao
     abstract fun thoughtAnalysisDao(): ThoughtAnalysisDao
+    abstract fun conversationTopicDao(): ConversationTopicDao
+    abstract fun todoDao(): ToDoDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -24,7 +31,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "recemotion.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }
