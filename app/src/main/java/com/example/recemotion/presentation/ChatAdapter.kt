@@ -110,17 +110,22 @@ class ChatAdapter : ListAdapter<ChatDisplayItem, RecyclerView.ViewHolder>(DiffCa
         private val txtOutput: TextView = view.findViewById(R.id.txtChatOutput)
         private val btnCopy: ImageButton = view.findViewById(R.id.btnCopyOutput)
         private val markwon = Markwon.create(view.context)
+        private var currentItem: ChatDisplayItem.AssistantOutput? = null
+
+        init {
+            btnCopy.setOnClickListener { view ->
+                val item = currentItem ?: return@setOnClickListener
+                val clipboard = view.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("chat output", item.markdownText))
+                Toast.makeText(view.context, "コピーしました", Toast.LENGTH_SHORT).show()
+            }
+        }
 
         fun bind(item: ChatDisplayItem.AssistantOutput) {
+            currentItem = item
             markwon.setMarkdown(txtOutput, item.markdownText)
             val color = EmotionCursorDrawable.emotionToColor(item.emotion)
             emotionBarOutput.setBackgroundColor(color)
-
-            btnCopy.setOnClickListener {
-                val clipboard = it.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("chat output", item.markdownText))
-                Toast.makeText(it.context, "コピーしました", Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
