@@ -2,10 +2,16 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <group android:checkableBehavior="single">
         <item
+            android:id="@+id/menu_chat"
+            android:title="チャット" />
+        <item
             android:id="@+id/menu_main"
             android:title="メイン" />
         <item
             android:id="@+id/menu_calendar"
             android:title="カレンダー" />
+        <item
+            android:id="@+id/menu_settings"
+            android:title="設定" />
     </group>
 </menu>

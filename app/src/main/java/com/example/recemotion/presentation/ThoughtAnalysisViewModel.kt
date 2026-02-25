@@ -2,6 +2,7 @@ package com.example.recemotion.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.recemotion.data.db.EmotionTimelineDao
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
 import com.example.recemotion.domain.model.AnalysisUpdate
 import com.example.recemotion.domain.model.DiagnosticMessage
@@ -15,6 +16,9 @@ import com.example.recemotion.domain.usecase.SystemDiagnosticUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +36,8 @@ class ThoughtAnalysisViewModel @Inject constructor(
     private val manageConversationUseCase: ManageConversationUseCase,
     private val diagnosticUseCase: SystemDiagnosticUseCase,
     private val repository: ThoughtRepository,
-    private val llmService: LLMInferenceService
+    private val llmService: LLMInferenceService,
+    private val emotionTimelineDao: EmotionTimelineDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ThoughtAnalysisUiState())
@@ -126,6 +131,9 @@ class ThoughtAnalysisViewModel @Inject constructor(
         analyzeJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
 
+            // 直近の感情タイムラインを取得してプロンプトコンテキストに付加
+            val emotionContext = buildEmotionContext()
+
             manageConversationUseCase.processInput(text).collect { event ->
                 when (event) {
                     is ConversationUpdateEvent.Analyzing -> {
@@ -138,7 +146,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
                             isNewTopicDetected = event.isNewTopic,
                             topicTitle = topic?.title
                         )
-                        startDetailedAnalysis(text, event.entryId)
+                        startDetailedAnalysis(text, event.entryId, emotionContext)
                     }
                     is ConversationUpdateEvent.Error -> {
                         _uiState.value = _uiState.value.copy(isAnalyzing = false, error = event.message)
@@ -148,8 +156,22 @@ class ThoughtAnalysisViewModel @Inject constructor(
         }
     }
 
-    private suspend fun startDetailedAnalysis(text: String, entryId: Long) {
-        analyzeThoughtUseCase.execute(text, entryId).collect { update ->
+    /** 直近 5 件の感情タイムラインをプロンプト用テキストに変換する */
+    private suspend fun buildEmotionContext(): String? {
+        return try {
+            val recent = emotionTimelineDao.getRecent(5)
+            if (recent.isEmpty()) return null
+            val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+            recent.reversed().joinToString("\n") { entry ->
+                "- ${fmt.format(Date(entry.timestamp))}: ${entry.emotion} (stress=${entry.stressLevel}, energy=${entry.energyLevel})"
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private suspend fun startDetailedAnalysis(text: String, entryId: Long, emotionContext: String? = null) {
+        analyzeThoughtUseCase.execute(text, entryId, emotionContext).collect { update ->
             val preserved = _uiState.value
             _uiState.value = when (update) {
                 is AnalysisUpdate.Analyzing -> preserved.copy(isAnalyzing = true)

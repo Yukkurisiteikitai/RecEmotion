@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ユーザー入力バブル: 感情カラーバー + 入力テキスト + タイムスタンプ -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp">
+
+    <!-- 感情カラーバー -->
+    <View
+        android:id="@+id/emotionBar"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_marginBottom="6dp"
+        android:background="#FFFFFF" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <!-- 入力テキストバブル -->
+        <TextView
+            android:id="@+id/txtChatInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="48dp"
+            android:background="#33FFFFFF"
+            android:fontFamily="sans-serif"
+            android:gravity="end"
+            android:padding="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- タイムスタンプ -->
+    <TextView
+        android:id="@+id/txtChatTimestamp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="2dp"
+        android:fontFamily="sans-serif-light"
+        android:textColor="#88FFFFFF"
+        android:textSize="10sp" />
+
+</LinearLayout>
