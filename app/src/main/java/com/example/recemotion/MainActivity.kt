@@ -32,8 +32,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var gestureDetector: GestureDetector
 
-    private enum class Screen { SETUP, MAIN, CALENDAR, SETTINGS }
-    private var currentScreen: Screen = Screen.MAIN
+    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS }
+    private var currentScreen: Screen = Screen.CHAT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,23 +48,26 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             val needsSetup = isFirstLaunchToday()
             val setupFrag = SetupFragment()
+            val chatFrag = ChatFragment()
             val mainFrag = MainScreenFragment()
             val calFrag = CalendarFragment()
             val settingsFrag = SettingsFragment()
 
             val tx = supportFragmentManager.beginTransaction()
+                .add(R.id.fragmentContainer, chatFrag, TAG_CHAT)
                 .add(R.id.fragmentContainer, mainFrag, TAG_MAIN)
                 .add(R.id.fragmentContainer, calFrag, TAG_CALENDAR)
                 .add(R.id.fragmentContainer, settingsFrag, TAG_SETTINGS)
+                .hide(mainFrag)
                 .hide(calFrag)
                 .hide(settingsFrag)
 
             if (needsSetup) {
                 tx.add(R.id.fragmentContainer, setupFrag, TAG_SETUP)
-                    .hide(mainFrag)
+                    .hide(chatFrag)
                 currentScreen = Screen.SETUP
             } else {
-                currentScreen = Screen.MAIN
+                currentScreen = Screen.CHAT
             }
 
             tx.commit()
@@ -81,13 +84,13 @@ class MainActivity : AppCompatActivity() {
     /** SetupFragment のセットアップ完了時に呼ばれる */
     fun onSetupComplete() {
         val setupFrag = supportFragmentManager.findFragmentByTag(TAG_SETUP) ?: return
-        val mainFrag = supportFragmentManager.findFragmentByTag(TAG_MAIN) ?: return
+        val chatFrag = supportFragmentManager.findFragmentByTag(TAG_CHAT) ?: return
         supportFragmentManager.beginTransaction()
             .hide(setupFrag)
-            .show(mainFrag)
+            .show(chatFrag)
             .commit()
-        currentScreen = Screen.MAIN
-        binding.navView.setCheckedItem(R.id.menu_main)
+        currentScreen = Screen.CHAT
+        binding.navView.setCheckedItem(R.id.menu_chat)
     }
 
     private fun setupNavigation() {
@@ -97,6 +100,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.navView.setNavigationItemSelectedListener { item ->
             when (item.itemId) {
+                R.id.menu_chat -> setScreen(Screen.CHAT)
                 R.id.menu_main -> setScreen(Screen.MAIN)
                 R.id.menu_calendar -> setScreen(Screen.CALENDAR)
                 R.id.menu_settings -> setScreen(Screen.SETTINGS)
@@ -105,7 +109,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        binding.navView.setCheckedItem(R.id.menu_main)
+        binding.navView.setCheckedItem(R.id.menu_chat)
     }
 
     private fun setScreen(screen: Screen) {
@@ -117,12 +121,16 @@ class MainActivity : AppCompatActivity() {
         val calFrag = supportFragmentManager.findFragmentByTag(TAG_CALENDAR) ?: return
         val settingsFrag = supportFragmentManager.findFragmentByTag(TAG_SETTINGS) ?: return
 
+        val chatFrag = supportFragmentManager.findFragmentByTag(TAG_CHAT)
+
         supportFragmentManager.beginTransaction().apply {
             // 全て非表示にしてから対象を表示
             setupFrag?.let { hide(it) }
+            chatFrag?.let { hide(it) }
             hide(mainFrag); hide(calFrag); hide(settingsFrag)
             when (screen) {
                 Screen.SETUP -> setupFrag?.let { show(it) }
+                Screen.CHAT -> chatFrag?.let { show(it) }
                 Screen.MAIN -> show(mainFrag)
                 Screen.CALENDAR -> show(calFrag)
                 Screen.SETTINGS -> show(settingsFrag)
@@ -156,6 +164,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val TAG = "RecEmotion_Main"
         private const val TAG_SETUP = SetupFragment.TAG
+        private const val TAG_CHAT = ChatFragment.FRAGMENT_TAG
         private const val TAG_MAIN = "MAIN"
         private const val TAG_CALENDAR = "CALENDAR"
         private const val TAG_SETTINGS = SettingsFragment.TAG

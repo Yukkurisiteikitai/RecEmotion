@@ -32,7 +32,7 @@ class AnalyzeThoughtUseCase @Inject constructor(
     private val serializer: ThoughtStructureJsonAdapter
 ) {
 
-    fun execute(text: String, entryId: Long? = null): Flow<AnalysisUpdate> = channelFlow {
+    fun execute(text: String, entryId: Long? = null, emotionContext: String? = null): Flow<AnalysisUpdate> = channelFlow {
         if (text.isBlank()) {
             send(AnalysisUpdate.Error("Input is empty"))
             return@channelFlow
@@ -47,7 +47,7 @@ class AnalyzeThoughtUseCase @Inject constructor(
 
         send(AnalysisUpdate.Progress(structure, ""))
 
-        val prompt = promptBuilder.build(structure)
+        val prompt = promptBuilder.build(structure, emotionContext)
         val stream = llmService.analyzeThoughtStructure(prompt)
         val partialBuilder = StringBuilder()
 

@@ -9,15 +9,25 @@ import javax.inject.Inject
  */
 class ThoughtPromptBuilder @Inject constructor() {
 
-    fun build(structure: ThoughtStructure): String {
+    /**
+     * 通常の解析プロンプトを構築する。
+     *
+     * @param structure 解析対象の思考ツリー
+     * @param emotionContext 感情タイムラインのログ文字列（省略可）。
+     *   渡された場合はプロンプトに「Emotion State Log」セクションとして追記する。
+     */
+    fun build(structure: ThoughtStructure, emotionContext: String? = null): String {
         val treeText = buildIndentedText(structure)
+        val emotionSection = if (!emotionContext.isNullOrBlank()) {
+            "\nEmotion State Log (facial emotion captured during input):\n$emotionContext\n"
+        } else ""
         return """
 You are an analysis engine. Analyze the following ThoughtTree and categorize the findings.
 Return ONLY JSON. Do not include extra text.
 
 ThoughtTree:
 $treeText
-
+$emotionSection
 Output JSON schema:
 {
   "premises": ["fundamental starting points"],

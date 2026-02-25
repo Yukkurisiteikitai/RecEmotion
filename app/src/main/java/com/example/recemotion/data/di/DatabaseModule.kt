@@ -3,6 +3,7 @@ package com.example.recemotion.data.di
 import android.content.Context
 import com.example.recemotion.data.db.AppDatabase
 import com.example.recemotion.data.db.ConversationTopicDao
+import com.example.recemotion.data.db.EmotionTimelineDao
 import com.example.recemotion.data.db.ThoughtAnalysisDao
 import com.example.recemotion.data.db.ThoughtEntryDao
 import com.example.recemotion.data.db.ToDoDao
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun provideToDoDao(db: AppDatabase): ToDoDao = db.todoDao()
+
+    @Provides
+    fun provideEmotionTimelineDao(db: AppDatabase): EmotionTimelineDao = db.emotionTimelineDao()
 }

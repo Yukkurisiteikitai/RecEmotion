@@ -119,6 +119,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
+    // Markwon - Markdown rendering
+    implementation("io.noties.markwon:core:4.6.2")
+
 }
 
 tasks.register<Exec>("cargoBuild") {
