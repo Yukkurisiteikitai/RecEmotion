@@ -141,6 +141,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         } else {
             wakeTimeUnix = defaultWakeTimeUnix()
             MainActivity.initSession(wakeTimeUnix)
+            // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
+            binding.overlayCalibration.visibility = View.VISIBLE
         }
 
         checkAndDownloadModel()
