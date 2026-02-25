@@ -127,13 +127,21 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         setupUI()
 
-        // デフォルト起床時刻: 今日の 7:00 AM
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 7)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        wakeTimeUnix = cal.timeInMillis / 1000
-        MainActivity.initSession(wakeTimeUnix)
+        // SetupFragment が本日セットアップ済みならその結果を引き継ぐ（Rustのキャリブレーション状態を保持）
+        val prefs = requireContext().getSharedPreferences(SetupFragment.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        if (prefs.getString(SetupFragment.KEY_LAST_DATE, "") == today) {
+            val stored = prefs.getLong(SetupFragment.KEY_WAKE_TIME_UNIX, 0L)
+            wakeTimeUnix = if (stored > 0) stored else defaultWakeTimeUnix()
+            val c = Calendar.getInstance().also { it.timeInMillis = wakeTimeUnix * 1000 }
+            binding.txtWakeTime.text = String.format("%02d:%02d",
+                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+            // SetupFragment でキャリブレーション済みなのでオーバーレイを非表示に
+            binding.overlayCalibration.visibility = View.GONE
+        } else {
+            wakeTimeUnix = defaultWakeTimeUnix()
+            MainActivity.initSession(wakeTimeUnix)
+        }
 
         checkAndDownloadModel()
 
@@ -233,6 +241,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                     as android.view.inputmethod.InputMethodManager
             imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
         }
+    }
+
+    private fun defaultWakeTimeUnix(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 7); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+        }.timeInMillis / 1000
     }
 
     // --- NativeCabochaParser 初期化 ---

@@ -7,5 +7,8 @@
         <item
             android:id="@+id/menu_calendar"
             android:title="カレンダー" />
+        <item
+            android:id="@+id/menu_settings"
+            android:title="設定" />
     </group>
 </menu>
