@@ -198,8 +198,10 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     }
 
     private fun stopCamera() {
-        ProcessCameraProvider.getInstance(requireContext()).addListener({
-            ProcessCameraProvider.getInstance(requireContext()).get().unbindAll()
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            cameraProvider.unbindAll()
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
