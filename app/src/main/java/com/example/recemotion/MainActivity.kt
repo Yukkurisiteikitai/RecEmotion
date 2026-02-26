@@ -4,14 +4,22 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
+import android.view.Menu
 import android.view.MotionEvent
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.recemotion.data.db.ConversationTopicEntity
 import com.example.recemotion.databinding.ActivityMainBinding
+import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * アプリのエントリーポイント。
@@ -32,8 +40,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var gestureDetector: GestureDetector
 
+    private val viewModel: ThoughtAnalysisViewModel by viewModels()
+
     private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS }
     private var currentScreen: Screen = Screen.CHAT
+
+    // ナビゲーションドロワーのトピック項目管理
+    private val topicMenuIdMap = mutableMapOf<Int, Long>() // menuItemId -> topicId
+    private val TOPIC_GROUP_ID = 100
+    private val TOPIC_HEADER_ITEM_ID = 101
+    private val TOPIC_ITEM_ID_BASE = 200
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         setupSwipeGesture()
+        observeTopicsForDrawer()
 
         if (savedInstanceState == null) {
             val needsSetup = isFirstLaunchToday()
@@ -74,6 +91,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun observeTopicsForDrawer() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.allTopics.collect { topics ->
+                    updateTopicsInDrawer(topics)
+                }
+            }
+        }
+    }
+
+    private fun updateTopicsInDrawer(topics: List<ConversationTopicEntity>) {
+        val menu = binding.navView.menu
+        menu.removeGroup(TOPIC_GROUP_ID)
+        topicMenuIdMap.clear()
+        if (topics.isEmpty()) return
+
+        menu.add(TOPIC_GROUP_ID, TOPIC_HEADER_ITEM_ID, Menu.NONE, "── TOPICS ──").apply {
+            isEnabled = false
+        }
+
+        topics.take(15).forEachIndexed { index, topic ->
+            val itemId = TOPIC_ITEM_ID_BASE + index
+            topicMenuIdMap[itemId] = topic.id
+            val prefix = if (topic.isResolved) "✓ " else "· "
+            menu.add(TOPIC_GROUP_ID, itemId, index + 1, "$prefix${topic.title}")
+        }
+    }
+
     private fun isFirstLaunchToday(): Boolean {
         val prefs = getSharedPreferences(SetupFragment.PREFS_NAME, Context.MODE_PRIVATE)
         val lastDate = prefs.getString(SetupFragment.KEY_LAST_DATE, "")
@@ -99,6 +144,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.navView.setNavigationItemSelectedListener { item ->
+            val topicId = topicMenuIdMap[item.itemId]
+            if (topicId != null) {
+                viewModel.selectTopic(topicId)
+                setScreen(Screen.CHAT)
+                binding.navView.setCheckedItem(R.id.menu_chat)
+                binding.drawerLayout.closeDrawer(GravityCompat.START)
+                return@setNavigationItemSelectedListener true
+            }
             when (item.itemId) {
                 R.id.menu_chat -> setScreen(Screen.CHAT)
                 R.id.menu_main -> setScreen(Screen.MAIN)
@@ -154,11 +207,11 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         })
+    }
 
-        binding.mainContent.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            false
-        }
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        gestureDetector.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     companion object {
