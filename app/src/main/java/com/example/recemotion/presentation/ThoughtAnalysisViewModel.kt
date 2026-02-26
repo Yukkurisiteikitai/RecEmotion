@@ -2,6 +2,7 @@ package com.example.recemotion.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.recemotion.data.db.ConversationTopicEntity
 import com.example.recemotion.data.db.EmotionTimelineDao
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
 import com.example.recemotion.domain.model.AnalysisUpdate
@@ -16,6 +17,7 @@ import com.example.recemotion.domain.usecase.SystemDiagnosticUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,6 +48,13 @@ class ThoughtAnalysisViewModel @Inject constructor(
 
     private val _historyItems = MutableStateFlow<List<ConversationDisplayItem>>(emptyList())
     val historyItems: StateFlow<List<ConversationDisplayItem>> = _historyItems.asStateFlow()
+
+    /** 全トピック一覧 — ナビゲーションドロワーで使用 */
+    val allTopics: StateFlow<List<ConversationTopicEntity>> = repository.getAllTopics()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** スクロール先トピックID — MainActivity から設定、ChatFragment で消費 */
+    val scrollToTopicId = MutableStateFlow<Long?>(null)
 
     /** Partial LLM token stream — forwarded from [LLMInferenceService]. */
     val partialResults: SharedFlow<String> = llmService.partialResults
@@ -196,6 +206,14 @@ class ThoughtAnalysisViewModel @Inject constructor(
 
     fun dismissTopicNotification() {
         _uiState.value = _uiState.value.copy(isNewTopicDetected = false)
+    }
+
+    fun selectTopic(topicId: Long) {
+        scrollToTopicId.value = topicId
+    }
+
+    fun clearScrollTarget() {
+        scrollToTopicId.value = null
     }
 
     fun pushSystemMessage(message: String, isError: Boolean = false) {

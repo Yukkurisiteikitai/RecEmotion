@@ -16,7 +16,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -52,7 +52,7 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
 
-    private val viewModel: ThoughtAnalysisViewModel by viewModels()
+    private val viewModel: ThoughtAnalysisViewModel by activityViewModels()
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var faceLandmarkerHelper: FaceLandmarkerHelper
     private lateinit var cameraExecutor: ExecutorService
@@ -320,6 +320,26 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                     }
                 }
             }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.scrollToTopicId.collect { topicId ->
+                    if (topicId != null) {
+                        scrollToTopic(topicId)
+                        viewModel.clearScrollTarget()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scrollToTopic(topicId: Long) {
+        val position = chatAdapter.currentList.indexOfFirst {
+            it is ChatDisplayItem.TopicDivider && it.id == topicId
+        }
+        if (position >= 0) {
+            binding.recyclerChatHistory.scrollToPosition(position)
         }
     }
 
