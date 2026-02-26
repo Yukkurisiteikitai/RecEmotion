@@ -154,11 +154,11 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         })
+    }
 
-        binding.mainContent.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            false
-        }
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        gestureDetector.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     companion object {

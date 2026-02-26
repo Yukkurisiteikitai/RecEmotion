@@ -340,7 +340,7 @@ private fun ConversationDisplayItem.toChatDisplayItems(): List<ChatDisplayItem> 
         )
         is ConversationDisplayItem.ThoughtAnalysis -> {
             val emotion = result?.emotions?.firstOrNull() ?: "Neutral"
-            val ts = createdAt
+            val ts = System.currentTimeMillis()
             buildList {
                 add(ChatDisplayItem.UserMessage(
                     id = id,
