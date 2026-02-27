@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "RecEmotion"
 include(":app")
+include(":settings-processor")
  

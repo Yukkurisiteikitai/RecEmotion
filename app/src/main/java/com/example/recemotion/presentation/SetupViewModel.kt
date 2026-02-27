@@ -1,11 +1,15 @@
 package com.example.recemotion.presentation
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.recemotion.settings.SetupSettingsStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -30,7 +34,9 @@ data class SetupUiState(
 )
 
 @HiltViewModel
-class SetupViewModel @Inject constructor() : ViewModel() {
+class SetupViewModel @Inject constructor(
+    private val settings: SetupSettingsStore
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SetupUiState())
     val uiState: StateFlow<SetupUiState> = _uiState.asStateFlow()
@@ -115,4 +121,14 @@ class SetupViewModel @Inject constructor() : ViewModel() {
     fun onSetupComplete() {
         _uiState.update { it.copy(setupComplete = true) }
     }
+
+    fun saveSetup(date: String, wakeTimeUnix: Long, autoCalibrate: Boolean) {
+        viewModelScope.launch {
+            settings.setLastDate(date)
+            settings.setWakeTimeUnix(wakeTimeUnix)
+            settings.setAutoCalibrate(autoCalibrate)
+        }
+    }
+
+    suspend fun getSavedAutoCalibrate(): Boolean = settings.autoCalibrateFlow.first()
 }

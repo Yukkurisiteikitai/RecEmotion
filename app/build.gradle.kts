@@ -122,6 +122,13 @@ dependencies {
     // Markwon - Markdown rendering
     implementation("io.noties.markwon:core:4.6.2")
 
+    // Settings system
+    compileOnly(project(":settings-processor"))
+    ksp(project(":settings-processor"))
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
 }
 
 tasks.register<Exec>("cargoBuild") {
