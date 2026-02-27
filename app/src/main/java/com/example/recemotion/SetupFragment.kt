@@ -91,12 +91,13 @@ class SetupFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         observeUiState()
 
         // 自動キャリブレーションが設定済みの場合は自動で開始
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_AUTO_CALIBRATE, false)) {
-            if (cameraGranted) {
-                startCalibration()
-            } else {
-                requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+        viewLifecycleOwner.lifecycleScope.launch {
+            if (viewModel.getSavedAutoCalibrate()) {
+                if (cameraGranted) {
+                    startCalibration()
+                } else {
+                    requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
             }
         }
     }
@@ -321,12 +322,7 @@ class SetupFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private fun completeSetup() {
         val state = viewModel.uiState.value
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(KEY_LAST_DATE, today)
-            .putLong(KEY_WAKE_TIME_UNIX, state.wakeTimeUnix)
-            .putBoolean(KEY_AUTO_CALIBRATE, state.autoCalibrate)
-            .apply()
-
+        viewModel.saveSetup(today, state.wakeTimeUnix, state.autoCalibrate)
         viewModel.onSetupComplete()
         (requireActivity() as MainActivity).onSetupComplete()
     }
@@ -412,9 +408,5 @@ class SetupFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     companion object {
         const val TAG = "SetupFragment"
-        const val PREFS_NAME = "recemotion_setup"
-        const val KEY_LAST_DATE = "setup_last_date"
-        const val KEY_WAKE_TIME_UNIX = "setup_wake_time_unix"
-        const val KEY_AUTO_CALIBRATE = "setup_auto_calibrate"
     }
 }

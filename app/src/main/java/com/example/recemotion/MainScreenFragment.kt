@@ -38,8 +38,11 @@ import com.example.recemotion.domain.model.UserResponse
 import com.example.recemotion.domain.model.VerificationQuestion
 import com.example.recemotion.presentation.ConversationAdapter
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
+import com.example.recemotion.settings.SetupSettingsStore
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -64,6 +67,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private lateinit var modelDownloadHelper: ModelDownloadHelper
     private val thoughtAnalysisViewModel: ThoughtAnalysisViewModel by viewModels()
     private lateinit var conversationAdapter: ConversationAdapter
+
+    @Inject lateinit var setupSettings: SetupSettingsStore
 
     private var wakeTimeUnix: Long = 0
 
@@ -128,21 +133,22 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         setupUI()
 
         // SetupFragment が本日セットアップ済みならその結果を引き継ぐ（Rustのキャリブレーション状態を保持）
-        val prefs = requireContext().getSharedPreferences(SetupFragment.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-        if (prefs.getString(SetupFragment.KEY_LAST_DATE, "") == today) {
-            val stored = prefs.getLong(SetupFragment.KEY_WAKE_TIME_UNIX, 0L)
-            wakeTimeUnix = if (stored > 0) stored else defaultWakeTimeUnix()
-            val c = Calendar.getInstance().also { it.timeInMillis = wakeTimeUnix * 1000 }
-            binding.txtWakeTime.text = String.format("%02d:%02d",
-                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
-            // SetupFragment でキャリブレーション済みなのでオーバーレイを非表示に
-            binding.overlayCalibration.visibility = View.GONE
-        } else {
-            wakeTimeUnix = defaultWakeTimeUnix()
-            MainActivity.initSession(wakeTimeUnix)
-            // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
-            binding.overlayCalibration.visibility = View.VISIBLE
+        viewLifecycleOwner.lifecycleScope.launch {
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            if (setupSettings.lastDateFlow.first() == today) {
+                val stored = setupSettings.wakeTimeUnixFlow.first()
+                wakeTimeUnix = if (stored > 0) stored else defaultWakeTimeUnix()
+                val c = Calendar.getInstance().also { it.timeInMillis = wakeTimeUnix * 1000 }
+                binding.txtWakeTime.text = String.format("%02d:%02d",
+                    c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+                // SetupFragment でキャリブレーション済みなのでオーバーレイを非表示に
+                binding.overlayCalibration.visibility = View.GONE
+            } else {
+                wakeTimeUnix = defaultWakeTimeUnix()
+                MainActivity.initSession(wakeTimeUnix)
+                // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
+                binding.overlayCalibration.visibility = View.VISIBLE
+            }
         }
 
         checkAndDownloadModel()

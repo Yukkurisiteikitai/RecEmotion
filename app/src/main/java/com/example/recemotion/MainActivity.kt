@@ -1,6 +1,5 @@
 package com.example.recemotion
 
-import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
@@ -15,11 +14,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.recemotion.data.db.ConversationTopicEntity
 import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
+import com.example.recemotion.settings.SetupSettingsStore
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * アプリのエントリーポイント。
@@ -39,6 +42,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var gestureDetector: GestureDetector
+
+    @Inject lateinit var setupSettings: SetupSettingsStore
 
     private val viewModel: ThoughtAnalysisViewModel by viewModels()
 
@@ -120,8 +125,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isFirstLaunchToday(): Boolean {
-        val prefs = getSharedPreferences(SetupFragment.PREFS_NAME, Context.MODE_PRIVATE)
-        val lastDate = prefs.getString(SetupFragment.KEY_LAST_DATE, "")
+        val lastDate = runBlocking { setupSettings.lastDateFlow.first() }
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         return lastDate != today
     }

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
     id("kotlin-parcelize")
@@ -78,6 +79,7 @@ android {
     
     buildFeatures {
         viewBinding = true
+        compose = true
     }
 }
 
@@ -98,6 +100,23 @@ dependencies {
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+
+    // Compose BOM — manages all androidx.compose.* versions
+    val composeBom = platform(libs.androidx.compose.bom)
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+
+    // Compose libraries (no versions needed — managed by BOM)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Lifecycle — collectAsStateWithLifecycle
+    implementation(libs.androidx.lifecycle.compose)
+
+    // activity-compose
+    implementation(libs.androidx.activity.compose)
 
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
@@ -121,6 +140,13 @@ dependencies {
 
     // Markwon - Markdown rendering
     implementation("io.noties.markwon:core:4.6.2")
+
+    // Settings system
+    compileOnly(project(":settings-processor"))
+    ksp(project(":settings-processor"))
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
 }
 
