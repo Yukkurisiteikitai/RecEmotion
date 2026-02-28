@@ -15,6 +15,7 @@ import com.example.recemotion.data.db.ConversationTopicEntity
 import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.example.recemotion.settings.SetupSettingsStore
+import com.example.recemotion.notification.SimpleNotification
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -23,6 +24,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+
 
 /**
  * アプリのエントリーポイント。
@@ -62,6 +64,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         supportActionBar?.hide()
+
+        // 通知チャンネルを作成
+        SimpleNotification.createChannel(this)
 
         setupNavigation()
         setupSwipeGesture()
@@ -234,6 +239,35 @@ class MainActivity : AppCompatActivity() {
             } catch (e: UnsatisfiedLinkError) {
                 Log.e(TAG, "Failed to load librecemotion.so: ${e.message}", e)
                 throw e
+            }
+        }
+
+        // Guard state - 低優先度の重複 initSession 呼び出しを防ぐ
+        // priority: 0=未呼び出し, 1=デフォルト (MainScreenFragment), 2=実カリブレーション (SetupFragment/手動)
+        private var sessionInitPriority: Int = 0
+        private var sessionInitDate: String = ""
+
+        /**
+         * 優先度を考慮した initSession() のラッパー。
+         * 同一日内で低優先度の呼び出しが重複するのを防ぐ。
+         *
+         * @param wakeTimeUnix 起床時刻 (Unix時刻)
+         * @param priority 優先度: 1=デフォルト初期化, 2=実カリブレーション/ユーザー操作 (デフォルト)
+         */
+        fun initSessionSafe(wakeTimeUnix: Long, priority: Int = 2) {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            // 新しい日付: ガード状態をリセット
+            if (sessionInitDate != today) {
+                sessionInitDate = today
+                sessionInitPriority = 0
+            }
+            // 優先度が同等以上ならば実行
+            if (priority >= sessionInitPriority) {
+                sessionInitPriority = priority
+                Log.d(TAG, "initSessionSafe: priority=$priority wakeTime=$wakeTimeUnix")
+                initSession(wakeTimeUnix)
+            } else {
+                Log.d(TAG, "initSessionSafe SKIPPED: priority=$priority < current=$sessionInitPriority")
             }
         }
 

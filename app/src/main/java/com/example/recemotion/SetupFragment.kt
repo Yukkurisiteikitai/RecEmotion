@@ -213,7 +213,7 @@ class SetupFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         binding.viewFinderSetup.visibility = View.VISIBLE
 
         val wakeTimeUnix = viewModel.uiState.value.wakeTimeUnix
-        MainActivity.initSession(if (wakeTimeUnix > 0) wakeTimeUnix else defaultWakeTimeUnix())
+        MainActivity.initSessionSafe(if (wakeTimeUnix > 0) wakeTimeUnix else defaultWakeTimeUnix())
         startCamera()
     }
 

@@ -145,7 +145,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 binding.overlayCalibration.visibility = View.GONE
             } else {
                 wakeTimeUnix = defaultWakeTimeUnix()
-                MainActivity.initSession(wakeTimeUnix)
+                MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
                 // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
                 binding.overlayCalibration.visibility = View.VISIBLE
             }
@@ -201,7 +201,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 wakeTimeUnix = newCal.timeInMillis / 1000
 
                 binding.txtWakeTime.text = String.format("%02d:%02d", hour, minute)
-                MainActivity.initSession(wakeTimeUnix)
+                MainActivity.initSessionSafe(wakeTimeUnix)
                 Toast.makeText(requireContext(), "Session Reset", Toast.LENGTH_SHORT).show()
             }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
         }
@@ -215,7 +215,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         // 再キャリブレーションボタン
         binding.btnReset.setOnClickListener {
-            MainActivity.initSession(wakeTimeUnix)
+            MainActivity.initSessionSafe(wakeTimeUnix)
         }
 
         // モデル選択ボタン
