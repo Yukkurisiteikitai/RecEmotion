@@ -1,14 +1,13 @@
 package com.example.recemotion.domain.usecase
 
-import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
-import com.example.recemotion.data.llm.ThoughtPromptBuilder
-import com.example.recemotion.data.parser.CabochaThoughtMapper
-import com.example.recemotion.data.parser.DependencyParser
-import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
 import com.example.recemotion.domain.model.AnalysisUpdate
 import com.example.recemotion.domain.model.LlmStreamEvent
 import com.example.recemotion.domain.model.ThoughtStructure
 import com.example.recemotion.domain.repository.ThoughtRepository
+import com.example.recemotion.domain.service.IPromptBuilder
+import com.example.recemotion.domain.service.IThoughtJsonParser
+import com.example.recemotion.domain.service.IThoughtStructureParser
+import com.example.recemotion.domain.service.IThoughtStructureSerializer
 import com.example.recemotion.domain.service.LLMInferenceService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,16 +19,15 @@ import javax.inject.Inject
 
 /**
  * Orchestrates the thought structuring analysis flow.
- * Depends only on domain interfaces and stable data-layer helpers.
+ * Depends only on domain interfaces.
  */
 class AnalyzeThoughtUseCase @Inject constructor(
-    private val parser: DependencyParser,
-    private val mapper: CabochaThoughtMapper,
-    private val promptBuilder: ThoughtPromptBuilder,
+    private val structureParser: IThoughtStructureParser,
+    private val promptBuilder: IPromptBuilder,
     private val llmService: LLMInferenceService,
-    private val jsonParser: ThoughtAnalysisJsonParser,
+    private val jsonParser: IThoughtJsonParser,
     private val repository: ThoughtRepository,
-    private val serializer: ThoughtStructureJsonAdapter
+    private val serializer: IThoughtStructureSerializer
 ) {
 
     fun execute(text: String, entryId: Long? = null, emotionContext: String? = null): Flow<AnalysisUpdate> = channelFlow {
@@ -41,8 +39,7 @@ class AnalyzeThoughtUseCase @Inject constructor(
         send(AnalysisUpdate.Analyzing)
 
         val structure: ThoughtStructure = withContext(Dispatchers.Default) {
-            val parsed = parser.parse(text)
-            mapper.map(parsed)
+            structureParser.parse(text)
         }
 
         send(AnalysisUpdate.Progress(structure, ""))

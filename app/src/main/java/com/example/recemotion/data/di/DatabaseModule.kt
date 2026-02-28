@@ -23,18 +23,18 @@ object DatabaseModule {
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         AppDatabase.getInstance(context)
 
-    @Provides
+    @Provides @Singleton
     fun provideThoughtEntryDao(db: AppDatabase): ThoughtEntryDao = db.thoughtEntryDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideThoughtAnalysisDao(db: AppDatabase): ThoughtAnalysisDao = db.thoughtAnalysisDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideConversationTopicDao(db: AppDatabase): ConversationTopicDao = db.conversationTopicDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideToDoDao(db: AppDatabase): ToDoDao = db.todoDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideEmotionTimelineDao(db: AppDatabase): EmotionTimelineDao = db.emotionTimelineDao()
 }

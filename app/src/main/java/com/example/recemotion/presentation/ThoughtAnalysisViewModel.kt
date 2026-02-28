@@ -2,26 +2,26 @@ package com.example.recemotion.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.recemotion.data.db.ConversationTopicEntity
-import com.example.recemotion.data.db.EmotionTimelineDao
 import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
+import com.example.recemotion.domain.repository.EmotionRepository
 import com.example.recemotion.domain.model.AnalysisUpdate
+import com.example.recemotion.domain.model.ConversationTopic
+import com.example.recemotion.domain.model.ConversationUpdateEvent
 import com.example.recemotion.domain.model.DiagnosticMessage
 import com.example.recemotion.domain.model.InferenceProgress
 import com.example.recemotion.domain.repository.ThoughtRepository
 import com.example.recemotion.domain.service.LLMInferenceService
 import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
-import com.example.recemotion.domain.usecase.ConversationUpdateEvent
 import com.example.recemotion.domain.usecase.ManageConversationUseCase
 import com.example.recemotion.domain.usecase.SystemDiagnosticUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -40,7 +40,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
     private val diagnosticUseCase: SystemDiagnosticUseCase,
     private val repository: ThoughtRepository,
     private val llmService: LLMInferenceService,
-    private val emotionTimelineDao: EmotionTimelineDao
+    private val emotionRepository: EmotionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ThoughtAnalysisUiState())
@@ -50,17 +50,17 @@ class ThoughtAnalysisViewModel @Inject constructor(
     val historyItems: StateFlow<List<ConversationDisplayItem>> = _historyItems.asStateFlow()
 
     /** 全トピック一覧 — ナビゲーションドロワーで使用 */
-    val allTopics: StateFlow<List<ConversationTopicEntity>> = repository.getAllTopics()
+    val allTopics: StateFlow<List<ConversationTopic>> = repository.getAllTopics()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** スクロール先トピックID — MainActivity から設定、ChatFragment で消費 */
     val scrollToTopicId = MutableStateFlow<Long?>(null)
 
     /** Partial LLM token stream — forwarded from [LLMInferenceService]. */
-    val partialResults: SharedFlow<String> = llmService.partialResults
+    val partialResults: Flow<String> = llmService.partialResults
 
     /** LLM inference progress — forwarded from [LLMInferenceService]. */
-    val progress: StateFlow<InferenceProgress> = llmService.progress
+    val progress: Flow<InferenceProgress> = llmService.progress
 
     private val jsonParser = ThoughtAnalysisJsonParser()
     private var analyzeJob: Job? = null
@@ -70,8 +70,8 @@ class ThoughtAnalysisViewModel @Inject constructor(
         runDiagnostic()
     }
 
-    /** Initializes the LLM model (delegates to [LLMInferenceService]). */
-    fun initModel() = llmService.initModel()
+    /** モデルファイルが新たにインストールされた後に呼び出す再初期化 */
+    fun initModel() = llmService.reloadModel()
 
     private fun loadHistory() {
         viewModelScope.launch {
@@ -169,7 +169,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
     /** 直近 5 件の感情タイムラインをプロンプト用テキストに変換する */
     private suspend fun buildEmotionContext(): String? {
         return try {
-            val recent = emotionTimelineDao.getRecent(5)
+            val recent = emotionRepository.getRecent(5)
             if (recent.isEmpty()) return null
             val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
             recent.reversed().joinToString("\n") { entry ->

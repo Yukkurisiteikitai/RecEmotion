@@ -2,7 +2,9 @@ package com.example.recemotion.data.parser
 
 import android.util.Log
 import com.example.recemotion.domain.model.LogicalFlowAnalysis
+import com.example.recemotion.domain.service.TopicChangeResult
 import com.example.recemotion.domain.service.TopicChangeService
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +38,19 @@ class TopicChangeDetectorImpl @Inject constructor() : TopicChangeService {
         Log.d(TAG, "Structural Similarity (Jaccard on Subjects): $similarity")
 
         return 1.0 - similarity
+    }
+
+    override fun parseTopicChangeResponse(llmResponse: String): TopicChangeResult {
+        return try {
+            val json = JSONObject(llmResponse)
+            TopicChangeResult(
+                isNewTopic = json.getBoolean("is_new_topic"),
+                suggestedTitle = json.optString("suggested_title", "New Topic")
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse LLM topic decision", e)
+            TopicChangeResult(isNewTopic = false)
+        }
     }
 
     override fun buildTopicChangePrompt(currentText: String, previousText: String): String = """

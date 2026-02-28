@@ -1,35 +1,31 @@
 package com.example.recemotion.domain.usecase
 
-import android.content.Context
-import com.example.recemotion.data.parser.CabochaModelManager
-import com.example.recemotion.data.parser.DictionaryManager
 import com.example.recemotion.domain.model.DiagnosticMessage
-import java.io.File
+import com.example.recemotion.domain.service.IResourceChecker
+import javax.inject.Inject
 
-class SystemDiagnosticUseCase @javax.inject.Inject constructor(
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val dictionaryManager: DictionaryManager,
-    private val cabochaModelManager: CabochaModelManager
+class SystemDiagnosticUseCase @Inject constructor(
+    private val resourceChecker: IResourceChecker
 ) {
     fun runDiagnostic(): List<DiagnosticMessage> {
         val logs = mutableListOf<DiagnosticMessage>()
 
         // 1. MeCab Dictionary
-        if (dictionaryManager.isInstalled()) {
+        if (resourceChecker.isDictionaryInstalled()) {
             logs.add(DiagnosticMessage("✅ MeCab Dictionary: Installed"))
         } else {
             logs.add(DiagnosticMessage("❌ MeCab Dictionary: Missing", isError = true))
         }
 
         // 2. CaboCha Models
-        if (cabochaModelManager.isInstalled()) {
+        if (resourceChecker.isCabochaModelInstalled()) {
             logs.add(DiagnosticMessage("✅ CaboCha Models: Installed"))
         } else {
             logs.add(DiagnosticMessage("❌ CaboCha Models: Missing", isError = true))
         }
 
         // 3. MediaPipe LLM Model
-        val modelFile = resolveModelFile()
+        val modelFile = resourceChecker.resolveLlmModelFile()
         if (modelFile != null) {
             val sizeMB = modelFile.length() / (1024 * 1024)
             logs.add(DiagnosticMessage("✅ MediaPipe LLM: Found (${sizeMB}MB)"))
@@ -38,19 +34,5 @@ class SystemDiagnosticUseCase @javax.inject.Inject constructor(
         }
 
         return logs
-    }
-
-    private fun resolveModelFile(): File? {
-        val supportedExtensions = listOf("bin", "task")
-        for (ext in supportedExtensions) {
-            val f = File(context.filesDir, "model.$ext")
-            if (f.exists() && f.length() > 0) return f
-        }
-        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-        for (ext in supportedExtensions) {
-            val f = File(downloadsDir, "model.$ext")
-            if (f.exists() && f.length() > 0) return f
-        }
-        return null
     }
 }

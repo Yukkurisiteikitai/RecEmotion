@@ -23,8 +23,14 @@ class LogicalFlowQuestionGenerator {
         // ── Q1: 全体フローの確認（2文以上のとき） ────────────────
 
         if (analysis.sentences.size > 1) {
-            val flowText = analysis.overallFlow
-                .mapIndexed { i, f -> "  ${i + 1}. $f" }
+            val flowText = analysis.sentences
+                .mapIndexed { i, s ->
+                    val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
+                    val subj = s.structure.subject.ifEmpty { "(主語不明)" }
+                    val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
+                    val verb = s.structure.verb.ifEmpty { "(述語不明)" }
+                    "  ${i + 1}. $timePrefix$subj が $objPart$verb"
+                }
                 .joinToString("\n")
             questions.add(
                 VerificationQuestion(

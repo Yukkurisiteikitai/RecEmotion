@@ -1,6 +1,8 @@
 package com.example.recemotion.data.di
 
+import com.example.recemotion.data.repository.EmotionRepositoryImpl
 import com.example.recemotion.data.repository.ThoughtRepositoryImpl
+import com.example.recemotion.domain.repository.EmotionRepository
 import com.example.recemotion.domain.repository.ThoughtRepository
 import dagger.Binds
 import dagger.Module
@@ -12,7 +14,9 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindThoughtRepository(impl: ThoughtRepositoryImpl): ThoughtRepository
+
+    @Binds @Singleton
+    abstract fun bindEmotionRepository(impl: EmotionRepositoryImpl): EmotionRepository
 }

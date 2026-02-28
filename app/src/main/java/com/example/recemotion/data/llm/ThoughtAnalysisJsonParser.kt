@@ -4,6 +4,7 @@ import com.example.recemotion.domain.model.Assumption
 import com.example.recemotion.domain.model.BiasDetection
 import com.example.recemotion.domain.model.MissingPerspective
 import com.example.recemotion.domain.model.ThoughtAnalysisResult
+import com.example.recemotion.domain.service.IThoughtJsonParser
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -11,9 +12,9 @@ import javax.inject.Inject
 /**
  * Parses the strict JSON response from the LLM.
  */
-class ThoughtAnalysisJsonParser @Inject constructor() {
+class ThoughtAnalysisJsonParser @Inject constructor() : IThoughtJsonParser {
 
-    fun parse(jsonText: String): ThoughtAnalysisResult {
+    override fun parse(jsonText: String): ThoughtAnalysisResult {
         val root = JSONObject(extractJson(jsonText))
         return ThoughtAnalysisResult(
             premises = readStringArray(root.optJSONArray("premises")),

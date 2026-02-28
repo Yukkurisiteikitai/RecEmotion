@@ -28,7 +28,7 @@ class LogicalFlowAnalyzerImpl @Inject constructor(
     }
 
     /** Optional native parser; can be set after async initialization. */
-    var nativeParser: NativeCabochaParser? = null
+    internal var nativeParser: NativeCabochaParser? = null
 
     override suspend fun analyze(text: String): LogicalFlowAnalysis = withContext(Dispatchers.Default) {
         val rawSentences = sentenceTokenizer.split(text)
@@ -38,18 +38,7 @@ class LogicalFlowAnalyzerImpl @Inject constructor(
             morphemeAnalyzer.analyze(idx, s, nativeParser)
         }
         val relations = relationDetector.detect(analyzed, rawSentences)
-        val overallFlow = buildOverallFlow(analyzed)
 
-        LogicalFlowAnalysis(analyzed, relations, overallFlow)
-    }
-
-    private fun buildOverallFlow(sentences: List<com.example.recemotion.domain.model.AnalyzedSentence>): List<String> {
-        return sentences.map { s ->
-            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
-            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
-            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
-            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
-            "$timePrefix$subj が ${objPart}${verb}"
-        }
+        LogicalFlowAnalysis(analyzed, relations)
     }
 }

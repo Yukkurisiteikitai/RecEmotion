@@ -115,8 +115,7 @@ data class Misalignment(
 
 data class LogicalFlowAnalysis(
     val sentences: List<AnalyzedSentence>,
-    val relations: List<LogicalRelation>,
-    val overallFlow: List<String>
+    val relations: List<LogicalRelation>
 )
 
 // ─── 最終レポート（Phase 5） ─────────────────────────────────────

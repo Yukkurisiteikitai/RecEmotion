@@ -26,7 +26,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.recemotion.data.parser.CabochaDependencyParser
 import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
-import com.example.recemotion.data.parser.LogicalFlowAnalyzer
+import com.example.recemotion.data.parser.LogicalFlowAnalyzerImpl
 import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
 import com.example.recemotion.data.parser.LogicalFlowReportBuilder
 import com.example.recemotion.data.parser.NativeCabochaParser
@@ -69,6 +69,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private lateinit var conversationAdapter: ConversationAdapter
 
     @Inject lateinit var setupSettings: SetupSettingsStore
+    @Inject lateinit var flowAnalyzerImpl: LogicalFlowAnalyzerImpl
 
     private var wakeTimeUnix: Long = 0
 
@@ -662,8 +663,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
-                val analyzer = LogicalFlowAnalyzer(nativeParser)
-                val analysis = analyzer.analyze(text)
+                flowAnalyzerImpl.nativeParser = nativeParser
+                val analysis = flowAnalyzerImpl.analyze(text)
                 val reportBuilder = LogicalFlowReportBuilder()
 
                 binding.progressContainer.visibility = View.GONE

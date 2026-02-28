@@ -20,4 +20,12 @@ interface TopicChangeService {
      * Builds a prompt for the LLM to decide whether the topic has changed.
      */
     fun buildTopicChangePrompt(currentText: String, previousText: String): String
+
+    /**
+     * Parses the LLM's JSON response into a [TopicChangeResult].
+     * Returns a default result (not a new topic) if parsing fails.
+     */
+    fun parseTopicChangeResponse(llmResponse: String): TopicChangeResult
 }
+
+data class TopicChangeResult(val isNewTopic: Boolean, val suggestedTitle: String = "New Topic")

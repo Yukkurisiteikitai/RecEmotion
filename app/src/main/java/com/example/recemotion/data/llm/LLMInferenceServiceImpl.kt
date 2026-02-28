@@ -3,6 +3,8 @@ package com.example.recemotion.data.llm
 import android.content.Context
 import android.os.Environment
 import android.util.Log
+import com.example.recemotion.domain.model.InferenceProgress
+import com.example.recemotion.domain.model.LlmStage
 import com.example.recemotion.domain.model.LlmStreamEvent
 import com.example.recemotion.domain.service.LLMInferenceService
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
@@ -15,8 +17,6 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
@@ -43,14 +43,18 @@ class LLMInferenceServiceImpl @Inject constructor(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    override val partialResults: SharedFlow<String> = _partialResults.asSharedFlow()
+    override val partialResults: Flow<String> = _partialResults.asSharedFlow()
 
     private val _progress = MutableStateFlow(
         InferenceProgress(stage = LlmStage.IDLE, current = 0, total = 0, message = "Idle")
     )
-    override val progress: StateFlow<InferenceProgress> = _progress.asStateFlow()
+    override val progress: Flow<InferenceProgress> = _progress.asStateFlow()
 
-    override fun initModel() {
+    init {
+        initModel()
+    }
+
+    private fun initModel() {
         Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
         updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
 
@@ -113,7 +117,9 @@ class LLMInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override fun isModelInitialized(): Boolean = isInitialized
+    override fun reloadModel() = initModel()
+
+    private fun isModelInitialized(): Boolean = isInitialized
 
     override fun generateResponse(prompt: String) {
         Log.d(TAG, "1/4 [generateResponse] called: promptLen=${prompt.length}")
@@ -152,8 +158,8 @@ class LLMInferenceServiceImpl @Inject constructor(
         Log.d(TAG, "2/5 [analyzeThought] model_check: isInitialized=$isInitialized")
         val inference = llmInference
         if (!isInitialized || inference == null) {
-            Log.w(TAG, "2/5 [analyzeThought] model_check: not ready → TestLLMInference")
-            com.example.recemotion.TestLLMInference.analyzeThoughtStructure(prompt).collect { emit(it) }
+            Log.w(TAG, "2/5 [analyzeThought] model_check: not ready")
+            emit(LlmStreamEvent.Error("LLM model is not initialized. Please ensure a valid model file is present."))
             return@flow
         }
 
@@ -170,13 +176,13 @@ class LLMInferenceServiceImpl @Inject constructor(
             emit(LlmStreamEvent.Done(result))
             updateProgress(LlmStage.DONE, message = "Done")
         } catch (e: Exception) {
-            Log.e(TAG, "4/5 [analyzeThought] generating: ERROR → TestLLMInference", e)
+            Log.e(TAG, "4/5 [analyzeThought] generating: ERROR", e)
             updateProgress(LlmStage.ERROR, message = "Error: inference failed")
-            com.example.recemotion.TestLLMInference.analyzeThoughtStructure(prompt).collect { emit(it) }
+            emit(LlmStreamEvent.Error("Inference failed: ${e.localizedMessage ?: "Unknown error"}"))
         }
     }.flowOn(Dispatchers.IO)
 
-    override fun close() {
+    private fun close() {
         initJob?.cancel()
         initJob = null
         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "close: error", e) }

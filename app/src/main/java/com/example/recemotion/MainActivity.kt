@@ -11,7 +11,7 @@ import androidx.core.view.GravityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.recemotion.data.db.ConversationTopicEntity
+import com.example.recemotion.domain.model.ConversationTopic
 import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.example.recemotion.settings.SetupSettingsStore
@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTopicsInDrawer(topics: List<ConversationTopicEntity>) {
+    private fun updateTopicsInDrawer(topics: List<ConversationTopic>) {
         val menu = binding.navView.menu
         menu.removeGroup(TOPIC_GROUP_ID)
         topicMenuIdMap.clear()

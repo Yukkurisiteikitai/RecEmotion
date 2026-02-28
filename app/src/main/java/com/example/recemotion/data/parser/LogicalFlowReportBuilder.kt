@@ -65,8 +65,12 @@ class LogicalFlowReportBuilder {
         // 全体フロー
         append("\n───────────────────────\n")
         append("【全体フロー（システム解釈）】\n")
-        analysis.overallFlow.forEachIndexed { i, flow ->
-            append("  ${i + 1}. $flow\n")
+        analysis.sentences.forEachIndexed { i, s ->
+            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
+            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
+            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
+            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
+            append("  ${i + 1}. $timePrefix$subj が ${objPart}${verb}\n")
             if (i < analysis.relations.size) {
                 val rel = analysis.relations[i]
                 append("      ↓ (${rel.relationType.label})\n")
@@ -234,8 +238,12 @@ class LogicalFlowReportBuilder {
 
         // 全体フロー（検証後）
         append("■ 全体の流れ（検証後）:\n")
-        report.analysis.overallFlow.forEachIndexed { i, flow ->
-            append("  ${i + 1}. $flow\n")
+        report.analysis.sentences.forEachIndexed { i, s ->
+            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
+            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
+            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
+            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
+            append("  ${i + 1}. $timePrefix$subj が ${objPart}${verb}\n")
             if (i < report.analysis.relations.size) {
                 val rel = report.analysis.relations[i]
                 append("      ↓ (${rel.relationType.label})\n")
