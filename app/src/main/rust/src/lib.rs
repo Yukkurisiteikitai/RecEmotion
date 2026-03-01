@@ -53,10 +53,11 @@ pub extern "system" fn Java_com_example_recemotion_MainActivity_getAnalysisJson(
         .unwrap_or_else(|_| "Error".to_string());
     
     let json_output = core::generate_analysis_json(input_text);
-    
-    env.new_string(json_output)
-        .expect("Couldn't create java string!")
-        .into_raw()
+
+    match env.new_string(&json_output) {
+        Ok(s) => s.into_raw(),
+        Err(_) => env.new_string("{}").map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut()),
+    }
 }
 
 #[no_mangle]

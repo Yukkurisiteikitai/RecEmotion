@@ -93,7 +93,7 @@ impl StatisticalCalibrator {
         self.is_calibrated = !self.stats.is_empty();
         
         if self.is_calibrated {
-            println!("Rust: Calibration Finalized. Stats: {:?}", self.stats);
+            log::info!("Rust: Calibration Finalized. {} features computed.", self.stats.len());
         }
         
         self.is_calibrated

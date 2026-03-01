@@ -42,9 +42,11 @@ import com.example.recemotion.settings.SetupSettingsStore
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.FileOutputStream
 import java.util.Calendar
@@ -146,7 +148,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 binding.overlayCalibration.visibility = View.GONE
             } else {
                 wakeTimeUnix = defaultWakeTimeUnix()
-                MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
+                withContext(Dispatchers.IO) {
+                    MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
+                }
                 // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
                 binding.overlayCalibration.visibility = View.VISIBLE
             }
