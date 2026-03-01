@@ -78,6 +78,18 @@ class LLMInferenceServiceImpl @Inject constructor(
             return
         }
 
+        // Validate file format before passing to native MediaPipe to prevent process abort.
+        // .task files must be ZIP archives (magic PK\x03\x04).
+        // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
+        val formatError = checkModelFileFormat(modelFile)
+        if (formatError != null) {
+            Log.e(TAG, "2/5 [initModel] format_check: $formatError")
+            _partialResults.tryEmit("Error: $formatError")
+            updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
+            isInitialized = false
+            return
+        }
+
         initJob?.cancel()
         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
         llmInference = null
@@ -280,6 +292,43 @@ class LLMInferenceServiceImpl @Inject constructor(
             total = total?.let { if (it > 0L) it else 0L } ?: prev.total,
             message = message?.map { ch -> if (ch.code in 32..126) ch else '?' }?.joinToString("") ?: prev.message
         )
+    }
+
+    /**
+     * Returns a human-readable error string if the model file format is incompatible,
+     * or null if the file looks acceptable.
+     * This check runs BEFORE passing to native MediaPipe to prevent process abort on bad format.
+     */
+    private fun checkModelFileFormat(file: File): String? {
+        val header = ByteArray(8)
+        try {
+            file.inputStream().use { it.read(header) }
+        } catch (e: Exception) {
+            return "Cannot read model file: ${e.message}"
+        }
+
+        // ZIP magic: PK\x03\x04 (MediaPipe .task bundles and some .bin formats)
+        val isZip = header[0] == 0x50.toByte() && header[1] == 0x4B.toByte() &&
+                    header[2] == 0x03.toByte() && header[3] == 0x04.toByte()
+
+        // GGUF magic: "GGUF" (incompatible with MediaPipe LiteRT LM)
+        val isGguf = header[0] == 0x47.toByte() && header[1] == 0x47.toByte() &&
+                     header[2] == 0x55.toByte() && header[3] == 0x46.toByte()
+
+        if (isGguf) {
+            return "Incompatible model format (GGUF). " +
+                   "MediaPipe requires a Gemma .task file from Google AI Edge: " +
+                   "https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference/android#models"
+        }
+
+        if (file.extension == "task" && !isZip) {
+            val hex = header.take(4).joinToString(" ") { "%02X".format(it) }
+            return "Invalid .task file (expected ZIP, got [$hex]). " +
+                   "Re-download from Google AI Edge model gallery."
+        }
+
+        Log.d(TAG, "format_check: ext=${file.extension} isZip=$isZip header=${header.take(4).map { "%02X".format(it) }}")
+        return null
     }
 
     companion object {
