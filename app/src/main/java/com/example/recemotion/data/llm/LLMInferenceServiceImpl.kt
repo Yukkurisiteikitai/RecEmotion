@@ -110,7 +110,9 @@ class LLMInferenceServiceImpl @Inject constructor(
             } catch (e: Exception) {
                 if (!isActive) return@launch
                 Log.e(TAG, "4/5 [initModel] model_load: FAILED", e)
-                _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n${e.localizedMessage ?: "Unknown error"}")
+                val detail = "${e.javaClass.simpleName}: ${e.message ?: "null"}"
+                Log.e(TAG, "model_load: FAILED detail=$detail", e)
+                _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n$detail")
                 updateProgress(stage = LlmStage.ERROR, message = "Error: failed to initialize model")
                 isInitialized = false
             }
@@ -178,7 +180,7 @@ class LLMInferenceServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "4/5 [analyzeThought] generating: ERROR", e)
             updateProgress(LlmStage.ERROR, message = "Error: inference failed")
-            emit(LlmStreamEvent.Error("Inference failed: ${e.localizedMessage ?: "Unknown error"}"))
+            emit(LlmStreamEvent.Error("Inference failed: ${e.javaClass.simpleName}: ${e.message ?: "null"}"))
         }
     }.flowOn(Dispatchers.IO)
 

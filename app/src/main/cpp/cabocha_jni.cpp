@@ -54,8 +54,9 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeParse(
     LOGI("nativeParse: mecabDic=%s, text_len=%zu", mecabDicDir, strlen(text));
 
     // CaboCha 初期化引数を組み立て
+    // -r /dev/null: Android に cabocharc が存在しないため system rc をスキップ
     // -m: dep model, -M: chunk model, -d: MeCab 辞書
-    std::string args;
+    std::string args = "-r /dev/null";
     if (mecabDicDir && mecabDicDir[0] != '\0') {
         args += " -d ";
         args += mecabDicDir;
@@ -155,7 +156,7 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeVerify(
     const char* mecabDicDir    = env->GetStringUTFChars(jMecabDicDir,      nullptr);
     const char* cabochaModelDir = env->GetStringUTFChars(jCabochaModelDir, nullptr);
 
-    std::string args;
+    std::string args = "-r /dev/null";
     if (mecabDicDir && mecabDicDir[0] != '\0') {
         args += " -d ";
         args += mecabDicDir;
