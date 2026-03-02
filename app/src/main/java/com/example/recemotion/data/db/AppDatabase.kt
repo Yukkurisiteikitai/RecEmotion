@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         EmotionTimelineEntity::class
     ],
     version = 4,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -35,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "recemotion.db"
                 )
                     .fallbackToDestructiveMigration()
+                    // TODO: Replace with explicit migrations before production release
                     .build()
                     .also { INSTANCE = it }
             }

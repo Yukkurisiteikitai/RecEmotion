@@ -20,9 +20,8 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.recemotion.data.db.EmotionTimelineDao
-import com.example.recemotion.data.db.EmotionTimelineEntity
 import com.example.recemotion.databinding.FragmentChatBinding
+import com.example.recemotion.domain.repository.EmotionRepository
 import com.example.recemotion.domain.model.LlmStage
 import com.example.recemotion.presentation.ChatAdapter
 import com.example.recemotion.presentation.ChatDisplayItem
@@ -58,7 +57,7 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var emotionCursorDrawable: EmotionCursorDrawable
 
-    @Inject lateinit var emotionTimelineDao: EmotionTimelineDao
+    @Inject lateinit var emotionRepository: EmotionRepository
 
     // 現在の感情/ストレス状態 (onResults で更新)
     private var currentEmotion = "Neutral"
@@ -141,14 +140,12 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             // 解析時点の感情をタイムラインに記録
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             viewLifecycleOwner.lifecycleScope.launch {
-                emotionTimelineDao.insert(
-                    EmotionTimelineEntity(
-                        emotion = currentEmotion,
-                        stressLevel = currentStress,
-                        energyLevel = currentEnergy,
-                        sessionDate = today,
-                        trigger = "analysis"
-                    )
+                emotionRepository.insert(
+                    emotion = currentEmotion,
+                    stressLevel = currentStress,
+                    energyLevel = currentEnergy,
+                    sessionDate = today,
+                    trigger = "analysis"
                 )
             }
 
@@ -272,14 +269,12 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             while (true) {
                 delay(30_000L) // 30秒ごと
                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-                emotionTimelineDao.insert(
-                    EmotionTimelineEntity(
-                        emotion = currentEmotion,
-                        stressLevel = currentStress,
-                        energyLevel = currentEnergy,
-                        sessionDate = today,
-                        trigger = "periodic"
-                    )
+                emotionRepository.insert(
+                    emotion = currentEmotion,
+                    stressLevel = currentStress,
+                    energyLevel = currentEnergy,
+                    sessionDate = today,
+                    trigger = "periodic"
                 )
             }
         }

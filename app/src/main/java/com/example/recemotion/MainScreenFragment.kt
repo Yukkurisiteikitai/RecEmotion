@@ -26,7 +26,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.recemotion.data.parser.CabochaDependencyParser
 import com.example.recemotion.data.parser.CabochaModelManager
 import com.example.recemotion.data.parser.DictionaryManager
-import com.example.recemotion.data.parser.LogicalFlowAnalyzer
+import com.example.recemotion.data.parser.LogicalFlowAnalyzerImpl
 import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
 import com.example.recemotion.data.parser.LogicalFlowReportBuilder
 import com.example.recemotion.data.parser.NativeCabochaParser
@@ -42,9 +42,11 @@ import com.example.recemotion.settings.SetupSettingsStore
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.FileOutputStream
 import java.util.Calendar
@@ -62,13 +64,14 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private var _binding: FragmentMainScreenBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var faceLandmarkerHelper: FaceLandmarkerHelper
+    private var faceLandmarkerHelper: FaceLandmarkerHelper? = null
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var modelDownloadHelper: ModelDownloadHelper
     private val thoughtAnalysisViewModel: ThoughtAnalysisViewModel by viewModels()
     private lateinit var conversationAdapter: ConversationAdapter
 
     @Inject lateinit var setupSettings: SetupSettingsStore
+    @Inject lateinit var flowAnalyzerImpl: LogicalFlowAnalyzerImpl
 
     private var wakeTimeUnix: Long = 0
 
@@ -122,7 +125,17 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         super.onViewCreated(view, savedInstanceState)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
-        faceLandmarkerHelper = FaceLandmarkerHelper(context = requireContext(), faceLandmarkerHelperListener = this)
+        // FaceLandmarker.createFromOptions() is a heavy I/O operation that blocks the calling thread.
+        // Submit to cameraExecutor (single-thread FIFO) so it completes before any frame analysis tasks.
+        val appContext = requireContext().applicationContext
+        cameraExecutor.execute {
+            try {
+                faceLandmarkerHelper = FaceLandmarkerHelper(context = appContext, faceLandmarkerHelperListener = this)
+            } catch (e: Exception) {
+                Log.e(TAG, "FaceLandmarkerHelper init failed", e)
+                view?.post { onError("FaceLandmarker init failed: ${e.message ?: "unknown"}") }
+            }
+        }
         modelDownloadHelper = ModelDownloadHelper(requireContext())
         conversationAdapter = ConversationAdapter(
             onGenerateToDo = { item -> thoughtAnalysisViewModel.generateToDo(item) },
@@ -145,7 +158,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 binding.overlayCalibration.visibility = View.GONE
             } else {
                 wakeTimeUnix = defaultWakeTimeUnix()
-                MainActivity.initSession(wakeTimeUnix)
+                withContext(Dispatchers.IO) {
+                    MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
+                }
                 // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
                 binding.overlayCalibration.visibility = View.VISIBLE
             }
@@ -181,8 +196,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // Submit cleanup to executor before shutdown so it runs after any in-flight init/frame tasks.
+        cameraExecutor.execute { faceLandmarkerHelper?.clearFaceLandmarker() }
         cameraExecutor.shutdown()
-        faceLandmarkerHelper.clearFaceLandmarker()
         _binding = null
     }
 
@@ -201,7 +217,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 wakeTimeUnix = newCal.timeInMillis / 1000
 
                 binding.txtWakeTime.text = String.format("%02d:%02d", hour, minute)
-                MainActivity.initSession(wakeTimeUnix)
+                MainActivity.initSessionSafe(wakeTimeUnix)
                 Toast.makeText(requireContext(), "Session Reset", Toast.LENGTH_SHORT).show()
             }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
         }
@@ -215,7 +231,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
         // 再キャリブレーションボタン
         binding.btnReset.setOnClickListener {
-            MainActivity.initSession(wakeTimeUnix)
+            MainActivity.initSessionSafe(wakeTimeUnix)
         }
 
         // モデル選択ボタン
@@ -309,7 +325,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor) { imageProxy ->
-                        faceLandmarkerHelper.detectLiveStream(imageProxy, isFrontCamera = true)
+                        val helper = faceLandmarkerHelper
+                        if (helper != null) {
+                            helper.detectLiveStream(imageProxy, isFrontCamera = true)
+                        } else {
+                            Log.v(TAG, "FaceLandmarkerHelper not ready, skipping frame")
+                        }
                         imageProxy.close()
                     }
                 }
@@ -662,8 +683,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
-                val analyzer = LogicalFlowAnalyzer(nativeParser)
-                val analysis = analyzer.analyze(text)
+                val analysis = flowAnalyzerImpl.analyze(text, nativeParser)
                 val reportBuilder = LogicalFlowReportBuilder()
 
                 binding.progressContainer.visibility = View.GONE

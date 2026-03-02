@@ -1,6 +1,7 @@
 package com.example.recemotion.domain.usecase
 
 import android.util.Log
+import com.example.recemotion.domain.model.ConversationUpdateEvent
 import com.example.recemotion.domain.model.LlmStreamEvent
 import com.example.recemotion.domain.repository.ThoughtRepository
 import com.example.recemotion.domain.service.LLMInferenceService
@@ -9,7 +10,6 @@ import com.example.recemotion.domain.service.TopicChangeService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
-import org.json.JSONObject
 import javax.inject.Inject
 
 class ManageConversationUseCase @Inject constructor(
@@ -48,14 +48,10 @@ class ManageConversationUseCase @Inject constructor(
                 val llmResult = llmService.analyzeThoughtStructure(prompt)
                     .first { it is LlmStreamEvent.Done } as LlmStreamEvent.Done
 
-                try {
-                    val json = JSONObject(llmResult.fullText)
-                    isNewTopic = json.getBoolean("is_new_topic")
-                    suggestedTitle = json.optString("suggested_title", "New Topic")
-                    Log.d(TAG, "LLM Topic Decision: $isNewTopic, Title: $suggestedTitle")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to parse LLM topic decision", e)
-                }
+                val topicChangeResult = topicChangeService.parseTopicChangeResponse(llmResult.fullText)
+                isNewTopic = topicChangeResult.isNewTopic
+                suggestedTitle = topicChangeResult.suggestedTitle
+                Log.d(TAG, "LLM Topic Decision: $isNewTopic, Title: $suggestedTitle")
             }
         }
 
@@ -78,10 +74,4 @@ class ManageConversationUseCase @Inject constructor(
 
         send(ConversationUpdateEvent.Done(finalTopicId, isNewTopic, entryId))
     }
-}
-
-sealed class ConversationUpdateEvent {
-    data class Analyzing(val message: String) : ConversationUpdateEvent()
-    data class Done(val topicId: Long, val isNewTopic: Boolean, val entryId: Long) : ConversationUpdateEvent()
-    data class Error(val message: String) : ConversationUpdateEvent()
 }

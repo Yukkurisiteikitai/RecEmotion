@@ -1,20 +1,28 @@
 package com.example.recemotion
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
 import android.view.Menu
 import android.view.MotionEvent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.recemotion.data.db.ConversationTopicEntity
+import com.example.recemotion.domain.model.ConversationTopic
 import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.example.recemotion.settings.SetupSettingsStore
+import com.example.recemotion.notification.SimpleNotification
+import com.example.recemotion.todo.ReminderFragment
+import com.example.recemotion.todo.ToDoListFragment
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -23,6 +31,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+
 
 /**
  * アプリのエントリーポイント。
@@ -43,11 +52,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var gestureDetector: GestureDetector
 
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+
     @Inject lateinit var setupSettings: SetupSettingsStore
 
     private val viewModel: ThoughtAnalysisViewModel by viewModels()
 
-    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS }
+    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS, TODO, REMINDER }
     private var currentScreen: Screen = Screen.CHAT
 
     // ナビゲーションドロワーのトピック項目管理
@@ -63,6 +75,17 @@ class MainActivity : AppCompatActivity() {
 
         supportActionBar?.hide()
 
+        // 通知チャンネルを作成
+        SimpleNotification.createChannel(this)
+
+        // Android 13+: POST_NOTIFICATIONS のランタイム権限をリクエスト
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         setupNavigation()
         setupSwipeGesture()
         observeTopicsForDrawer()
@@ -74,15 +97,21 @@ class MainActivity : AppCompatActivity() {
             val mainFrag = MainScreenFragment()
             val calFrag = CalendarFragment()
             val settingsFrag = SettingsFragment()
+            val toDoFrag = ToDoListFragment()
+            val reminderFrag = ReminderFragment()
 
             val tx = supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, chatFrag, TAG_CHAT)
                 .add(R.id.fragmentContainer, mainFrag, TAG_MAIN)
                 .add(R.id.fragmentContainer, calFrag, TAG_CALENDAR)
                 .add(R.id.fragmentContainer, settingsFrag, TAG_SETTINGS)
+                .add(R.id.fragmentContainer, toDoFrag, TAG_TODO)
+                .add(R.id.fragmentContainer, reminderFrag, TAG_REMINDER)
                 .hide(mainFrag)
                 .hide(calFrag)
                 .hide(settingsFrag)
+                .hide(toDoFrag)
+                .hide(reminderFrag)
 
             if (needsSetup) {
                 tx.add(R.id.fragmentContainer, setupFrag, TAG_SETUP)
@@ -106,7 +135,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTopicsInDrawer(topics: List<ConversationTopicEntity>) {
+    private fun updateTopicsInDrawer(topics: List<ConversationTopic>) {
         val menu = binding.navView.menu
         menu.removeGroup(TOPIC_GROUP_ID)
         topicMenuIdMap.clear()
@@ -161,6 +190,8 @@ class MainActivity : AppCompatActivity() {
                 R.id.menu_main -> setScreen(Screen.MAIN)
                 R.id.menu_calendar -> setScreen(Screen.CALENDAR)
                 R.id.menu_settings -> setScreen(Screen.SETTINGS)
+                R.id.menu_todo -> setScreen(Screen.TODO)
+                R.id.menu_reminder -> setScreen(Screen.REMINDER)
             }
             binding.drawerLayout.closeDrawer(GravityCompat.START)
             true
@@ -177,6 +208,8 @@ class MainActivity : AppCompatActivity() {
         val mainFrag = supportFragmentManager.findFragmentByTag(TAG_MAIN) ?: return
         val calFrag = supportFragmentManager.findFragmentByTag(TAG_CALENDAR) ?: return
         val settingsFrag = supportFragmentManager.findFragmentByTag(TAG_SETTINGS) ?: return
+        val toDoFrag = supportFragmentManager.findFragmentByTag(TAG_TODO)
+        val reminderFrag = supportFragmentManager.findFragmentByTag(TAG_REMINDER)
 
         val chatFrag = supportFragmentManager.findFragmentByTag(TAG_CHAT)
 
@@ -185,12 +218,16 @@ class MainActivity : AppCompatActivity() {
             setupFrag?.let { hide(it) }
             chatFrag?.let { hide(it) }
             hide(mainFrag); hide(calFrag); hide(settingsFrag)
+            toDoFrag?.let { hide(it) }
+            reminderFrag?.let { hide(it) }
             when (screen) {
                 Screen.SETUP -> setupFrag?.let { show(it) }
                 Screen.CHAT -> chatFrag?.let { show(it) }
                 Screen.MAIN -> show(mainFrag)
                 Screen.CALENDAR -> show(calFrag)
                 Screen.SETTINGS -> show(settingsFrag)
+                Screen.TODO -> toDoFrag?.let { show(it) }
+                Screen.REMINDER -> reminderFrag?.let { show(it) }
             }
         }.commit()
     }
@@ -225,6 +262,8 @@ class MainActivity : AppCompatActivity() {
         private const val TAG_MAIN = "MAIN"
         private const val TAG_CALENDAR = "CALENDAR"
         private const val TAG_SETTINGS = SettingsFragment.TAG
+        private const val TAG_TODO = ToDoListFragment.TAG
+        private const val TAG_REMINDER = ReminderFragment.TAG
 
         // Rust (librecemotion.so) のロード
         init {
@@ -234,6 +273,35 @@ class MainActivity : AppCompatActivity() {
             } catch (e: UnsatisfiedLinkError) {
                 Log.e(TAG, "Failed to load librecemotion.so: ${e.message}", e)
                 throw e
+            }
+        }
+
+        // Guard state - 低優先度の重複 initSession 呼び出しを防ぐ
+        // priority: 0=未呼び出し, 1=デフォルト (MainScreenFragment), 2=実カリブレーション (SetupFragment/手動)
+        private var sessionInitPriority: Int = 0
+        private var sessionInitDate: String = ""
+
+        /**
+         * 優先度を考慮した initSession() のラッパー。
+         * 同一日内で低優先度の呼び出しが重複するのを防ぐ。
+         *
+         * @param wakeTimeUnix 起床時刻 (Unix時刻)
+         * @param priority 優先度: 1=デフォルト初期化, 2=実カリブレーション/ユーザー操作 (デフォルト)
+         */
+        fun initSessionSafe(wakeTimeUnix: Long, priority: Int = 2) {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            // 新しい日付: ガード状態をリセット
+            if (sessionInitDate != today) {
+                sessionInitDate = today
+                sessionInitPriority = 0
+            }
+            // 優先度が同等以上ならば実行
+            if (priority >= sessionInitPriority) {
+                sessionInitPriority = priority
+                Log.d(TAG, "initSessionSafe: priority=$priority wakeTime=$wakeTimeUnix")
+                initSession(wakeTimeUnix)
+            } else {
+                Log.d(TAG, "initSessionSafe SKIPPED: priority=$priority < current=$sessionInitPriority")
             }
         }
 

@@ -40,23 +40,23 @@ lazy_static! {
 // --- Face Emotion Analysis Logic ---
 
 pub fn init_session(wake_time: i64) {
-    let mut state = GLOBAL_STATE.lock().unwrap();
+    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
     state.wake_time = Some(wake_time);
     state.calibrator = StatisticalCalibrator::new(); // Reset calibration
     state.emotion_history.clear();
     state.current_emotion = "Neutral".to_string();
-    println!("Rust State: Session initialized with wake_time={}", wake_time);
+    log::info!("Rust: Session initialized with wake_time={}", wake_time);
 }
 
 pub fn update_stress(level: i32) {
-    let mut state = GLOBAL_STATE.lock().unwrap();
+    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
     state.stress_level = level.clamp(1, 5);
-    println!("Rust State: Stress level updated to {}", state.stress_level);
+    log::info!("Rust: Stress level updated to {}", state.stress_level);
 }
 
 // Replaces push_emotion_frame
 pub fn process_face_landmarks(coords: Vec<f32>) {
-    let mut state = GLOBAL_STATE.lock().unwrap();
+    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
     
     // Convert flat vec to Point3D (r.len() / 3)
     let num_points = coords.len() / 3;
@@ -84,7 +84,7 @@ pub fn process_face_landmarks(coords: Vec<f32>) {
             // Auto-finalize if enough samples (e.g., 30 frames ~ 1 sec)
             if state.calibrator.samples.len() >= 30 {
                 state.calibrator.finalize_calibration();
-                println!("Rust: Calibration finalized!");
+                log::info!("Rust: Calibration finalized!");
             }
         } else {
             // Already calibrated: calculate Z-scores and emotion
@@ -124,13 +124,13 @@ fn is_head_pose_valid(landmarks: &[Point3D]) -> bool {
 }
 
 pub fn calculate_energy() -> i32 {
-    let state = GLOBAL_STATE.lock().unwrap();
+    let state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
     match state.wake_time {
         Some(wake) => {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
             calculate_energy_logic(wake, now)
         }
-        None => 3, 
+        None => 3,
     }
 }
 
@@ -145,11 +145,12 @@ fn calculate_energy_logic(wake_time: i64, current_time: i64) -> i32 {
 }
 
 pub fn generate_analysis_json(text_input: String) -> String {
-    let state = GLOBAL_STATE.lock().unwrap();
-    
+    let state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
+
+    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     let energy = match state.wake_time {
-        Some(w) => calculate_energy_logic(w, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        None => 3
+        Some(w) => calculate_energy_logic(w, now_secs as i64),
+        None => 3,
     };
 
     let emotion_summary = if state.emotion_history.is_empty() {
@@ -170,7 +171,7 @@ pub fn generate_analysis_json(text_input: String) -> String {
 
     let response = serde_json::json!({
         "status": "success",
-        "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        "timestamp": now_secs,
         "context": {
             "energy_level": energy,
             "stress_level": state.stress_level,

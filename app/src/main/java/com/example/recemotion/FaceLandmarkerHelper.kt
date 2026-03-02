@@ -85,7 +85,9 @@ class FaceLandmarkerHelper(
     }
 
     private fun returnLivestreamError(error: RuntimeException) {
-        faceLandmarkerHelperListener?.onError(error.message ?: "An unknown error has occurred")
+        val msg = "${error.javaClass.simpleName}: ${error.message ?: "null"}"
+        Log.e(TAG, "Livestream error", error)
+        faceLandmarkerHelperListener?.onError(msg)
     }
 
     interface LandmarkerListener {

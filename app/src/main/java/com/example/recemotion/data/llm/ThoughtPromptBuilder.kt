@@ -2,12 +2,13 @@ package com.example.recemotion.data.llm
 
 import com.example.recemotion.domain.model.ThoughtNode
 import com.example.recemotion.domain.model.ThoughtStructure
+import com.example.recemotion.domain.service.IPromptBuilder
 import javax.inject.Inject
 
 /**
  * Builds a strict JSON-only prompt for thought analysis.
  */
-class ThoughtPromptBuilder @Inject constructor() {
+class ThoughtPromptBuilder @Inject constructor() : IPromptBuilder {
 
     /**
      * 通常の解析プロンプトを構築する。
@@ -16,7 +17,7 @@ class ThoughtPromptBuilder @Inject constructor() {
      * @param emotionContext 感情タイムラインのログ文字列（省略可）。
      *   渡された場合はプロンプトに「Emotion State Log」セクションとして追記する。
      */
-    fun build(structure: ThoughtStructure, emotionContext: String? = null): String {
+    override fun build(structure: ThoughtStructure, emotionContext: String?): String {
         val treeText = buildIndentedText(structure)
         val emotionSection = if (!emotionContext.isNullOrBlank()) {
             "\nEmotion State Log (facial emotion captured during input):\n$emotionContext\n"
