@@ -16,6 +16,8 @@ import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.example.recemotion.settings.SetupSettingsStore
 import com.example.recemotion.notification.SimpleNotification
+import com.example.recemotion.todo.ReminderFragment
+import com.example.recemotion.todo.ToDoListFragment
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,7 +51,7 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: ThoughtAnalysisViewModel by viewModels()
 
-    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS }
+    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS, TODO, REMINDER }
     private var currentScreen: Screen = Screen.CHAT
 
     // ナビゲーションドロワーのトピック項目管理
@@ -79,15 +81,21 @@ class MainActivity : AppCompatActivity() {
             val mainFrag = MainScreenFragment()
             val calFrag = CalendarFragment()
             val settingsFrag = SettingsFragment()
+            val toDoFrag = ToDoListFragment()
+            val reminderFrag = ReminderFragment()
 
             val tx = supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, chatFrag, TAG_CHAT)
                 .add(R.id.fragmentContainer, mainFrag, TAG_MAIN)
                 .add(R.id.fragmentContainer, calFrag, TAG_CALENDAR)
                 .add(R.id.fragmentContainer, settingsFrag, TAG_SETTINGS)
+                .add(R.id.fragmentContainer, toDoFrag, TAG_TODO)
+                .add(R.id.fragmentContainer, reminderFrag, TAG_REMINDER)
                 .hide(mainFrag)
                 .hide(calFrag)
                 .hide(settingsFrag)
+                .hide(toDoFrag)
+                .hide(reminderFrag)
 
             if (needsSetup) {
                 tx.add(R.id.fragmentContainer, setupFrag, TAG_SETUP)
@@ -166,6 +174,8 @@ class MainActivity : AppCompatActivity() {
                 R.id.menu_main -> setScreen(Screen.MAIN)
                 R.id.menu_calendar -> setScreen(Screen.CALENDAR)
                 R.id.menu_settings -> setScreen(Screen.SETTINGS)
+                R.id.menu_todo -> setScreen(Screen.TODO)
+                R.id.menu_reminder -> setScreen(Screen.REMINDER)
             }
             binding.drawerLayout.closeDrawer(GravityCompat.START)
             true
@@ -182,6 +192,8 @@ class MainActivity : AppCompatActivity() {
         val mainFrag = supportFragmentManager.findFragmentByTag(TAG_MAIN) ?: return
         val calFrag = supportFragmentManager.findFragmentByTag(TAG_CALENDAR) ?: return
         val settingsFrag = supportFragmentManager.findFragmentByTag(TAG_SETTINGS) ?: return
+        val toDoFrag = supportFragmentManager.findFragmentByTag(TAG_TODO)
+        val reminderFrag = supportFragmentManager.findFragmentByTag(TAG_REMINDER)
 
         val chatFrag = supportFragmentManager.findFragmentByTag(TAG_CHAT)
 
@@ -190,12 +202,16 @@ class MainActivity : AppCompatActivity() {
             setupFrag?.let { hide(it) }
             chatFrag?.let { hide(it) }
             hide(mainFrag); hide(calFrag); hide(settingsFrag)
+            toDoFrag?.let { hide(it) }
+            reminderFrag?.let { hide(it) }
             when (screen) {
                 Screen.SETUP -> setupFrag?.let { show(it) }
                 Screen.CHAT -> chatFrag?.let { show(it) }
                 Screen.MAIN -> show(mainFrag)
                 Screen.CALENDAR -> show(calFrag)
                 Screen.SETTINGS -> show(settingsFrag)
+                Screen.TODO -> toDoFrag?.let { show(it) }
+                Screen.REMINDER -> reminderFrag?.let { show(it) }
             }
         }.commit()
     }
@@ -230,6 +246,8 @@ class MainActivity : AppCompatActivity() {
         private const val TAG_MAIN = "MAIN"
         private const val TAG_CALENDAR = "CALENDAR"
         private const val TAG_SETTINGS = SettingsFragment.TAG
+        private const val TAG_TODO = ToDoListFragment.TAG
+        private const val TAG_REMINDER = ReminderFragment.TAG
 
         // Rust (librecemotion.so) のロード
         init {

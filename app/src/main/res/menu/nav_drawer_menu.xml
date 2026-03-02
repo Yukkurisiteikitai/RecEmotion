@@ -13,5 +13,11 @@
         <item
             android:id="@+id/menu_settings"
             android:title="設定" />
+        <item
+            android:id="@+id/menu_todo"
+            android:title="ToDoリスト" />
+        <item
+            android:id="@+id/menu_reminder"
+            android:title="リマインド" />
     </group>
 </menu>

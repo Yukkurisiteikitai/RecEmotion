@@ -9,6 +9,7 @@ import com.example.recemotion.domain.model.ConversationTopic
 import com.example.recemotion.domain.model.ConversationUpdateEvent
 import com.example.recemotion.domain.model.DiagnosticMessage
 import com.example.recemotion.domain.model.InferenceProgress
+import com.example.recemotion.domain.model.ToDo
 import com.example.recemotion.domain.repository.ThoughtRepository
 import com.example.recemotion.domain.service.LLMInferenceService
 import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
@@ -51,6 +52,10 @@ class ThoughtAnalysisViewModel @Inject constructor(
 
     /** 全トピック一覧 — ナビゲーションドロワーで使用 */
     val allTopics: StateFlow<List<ConversationTopic>> = repository.getAllTopics()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 全ToDoリスト — ToDoListFragment で使用 */
+    val allTodos: StateFlow<List<ToDo>> = repository.getAllToDos()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** スクロール先トピックID — MainActivity から設定、ChatFragment で消費 */
