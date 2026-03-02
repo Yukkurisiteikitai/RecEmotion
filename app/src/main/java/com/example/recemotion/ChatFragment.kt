@@ -298,7 +298,11 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 viewModel.uiState.collect { state ->
                     state.error?.let { error ->
                         binding.chatProgressContainer.visibility = View.GONE
-                        Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show()
+                        // init フェーズのエラーは MainScreenFragment が担当するため、
+                        // モデルがロード済みの場合（実行時エラー）のみ Toast を表示する
+                        if (viewModel.isModelReady.value) {
+                            Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }

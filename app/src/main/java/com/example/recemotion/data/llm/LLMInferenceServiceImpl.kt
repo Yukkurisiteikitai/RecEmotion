@@ -42,6 +42,9 @@ class LLMInferenceServiceImpl @Inject constructor(
     @Volatile private var initJob: Job? = null
     private val initLock = Any()
 
+    private val _isModelReady = MutableStateFlow(false)
+    override val isModelReady: StateFlow<Boolean> = _isModelReady.asStateFlow()
+
     private val _partialResults = MutableSharedFlow<String>(
         replay = 0,
         extraBufferCapacity = 1,
@@ -68,7 +71,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
             try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
             llmInference = null
-            isInitialized = false
+            isInitialized = false; _isModelReady.value = false
             initJob = helperScope.launch {
                 runInitCoroutine()
             }
@@ -83,7 +86,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             val msg = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
             _partialResults.tryEmit(msg)
             updateProgress(stage = LlmStage.ERROR, message = "Error: model file not found")
-            isInitialized = false
+            isInitialized = false; _isModelReady.value = false
             return
         }
         Log.d(TAG, "1/5 [initModel] validate_file: found → ${modelFile.absolutePath}")
@@ -93,7 +96,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             Log.w(TAG, "2/5 [initModel] size_check: TOO LARGE (${fileSizeGB}GB)")
             _partialResults.tryEmit("Error: Model file is invalid or corrupted (too large).")
             updateProgress(stage = LlmStage.ERROR, message = "Error: invalid model file")
-            isInitialized = false
+            isInitialized = false; _isModelReady.value = false
             return
         }
 
@@ -105,7 +108,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             Log.e(TAG, "2/5 [initModel] format_check: $formatError")
             _partialResults.tryEmit("Error: $formatError")
             updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
-            isInitialized = false
+            isInitialized = false; _isModelReady.value = false
             return
         }
 
@@ -123,12 +126,12 @@ class LLMInferenceServiceImpl @Inject constructor(
                 Log.w(TAG, "4/5 [initModel] model_load: createFromOptions returned null")
                 _partialResults.tryEmit("Error: MediaPipe model init returned null (unsupported format?)")
                 updateProgress(stage = LlmStage.ERROR, message = "Error: model init null")
-                isInitialized = false
+                isInitialized = false; _isModelReady.value = false
                 return
             }
 
             llmInference = inference
-            isInitialized = true
+            isInitialized = true; _isModelReady.value = true
             Log.i(TAG, "5/5 [initModel] init_complete: model ready")
             updateProgress(stage = LlmStage.IDLE, message = "Model ready")
             _partialResults.tryEmit("MediaPipe LLM model loaded successfully.")
@@ -139,7 +142,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             Log.e(TAG, "model_load: FAILED detail=$detail", e)
             _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n$detail")
             updateProgress(stage = LlmStage.ERROR, message = "Error: failed to initialize model")
-            isInitialized = false
+            isInitialized = false; _isModelReady.value = false
         }
     }
 
@@ -220,7 +223,7 @@ class LLMInferenceServiceImpl @Inject constructor(
         initJob?.cancel()
         initJob = null
         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "close: error", e) }
-        isInitialized = false
+        isInitialized = false; _isModelReady.value = false
         llmInference = null
         updateProgress(stage = LlmStage.IDLE, current = 0, total = 0, message = "Idle")
     }

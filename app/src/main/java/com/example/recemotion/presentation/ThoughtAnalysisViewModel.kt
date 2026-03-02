@@ -68,6 +68,9 @@ class ThoughtAnalysisViewModel @Inject constructor(
     /** LLM inference progress — forwarded from [LLMInferenceService]. */
     val progress: StateFlow<InferenceProgress> = llmService.progress
 
+    /** True when the LLM model is loaded and ready — forwarded from [LLMInferenceService]. */
+    val isModelReady: StateFlow<Boolean> get() = llmService.isModelReady
+
     private val jsonParser = ThoughtAnalysisJsonParser()
     @Volatile private var analyzeJob: Job? = null
 

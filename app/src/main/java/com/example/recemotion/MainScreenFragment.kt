@@ -74,6 +74,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     @Inject lateinit var flowAnalyzerImpl: LogicalFlowAnalyzerImpl
 
     private var wakeTimeUnix: Long = 0
+    private var pendingModelCheck = false
 
     // --- Parser 比較 ---
     private lateinit var dictionaryManager: DictionaryManager
@@ -166,7 +167,11 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             }
         }
 
-        checkAndDownloadModel()
+        if (isHidden) {
+            pendingModelCheck = true
+        } else {
+            checkAndDownloadModel()
+        }
 
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
             == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -191,7 +196,15 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (hidden) stopCamera() else startCamera()
+        if (hidden) {
+            stopCamera()
+        } else {
+            startCamera()
+            if (pendingModelCheck) {
+                pendingModelCheck = false
+                checkAndDownloadModel()
+            }
+        }
     }
 
     override fun onDestroyView() {
