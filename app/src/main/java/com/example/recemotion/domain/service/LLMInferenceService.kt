@@ -3,6 +3,7 @@ package com.example.recemotion.domain.service
 import com.example.recemotion.domain.model.InferenceProgress
 import com.example.recemotion.domain.model.LlmStreamEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Domain interface for LLM inference operations.
@@ -17,7 +18,7 @@ interface LLMInferenceService {
     val partialResults: Flow<String>
 
     /** Current inference progress state. */
-    val progress: Flow<InferenceProgress>
+    val progress: StateFlow<InferenceProgress>
 
     /**
      * Re-initializes the model from storage.

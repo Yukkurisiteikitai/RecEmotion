@@ -1,12 +1,17 @@
 package com.example.recemotion
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
 import android.view.Menu
 import android.view.MotionEvent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -47,6 +52,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var gestureDetector: GestureDetector
 
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+
     @Inject lateinit var setupSettings: SetupSettingsStore
 
     private val viewModel: ThoughtAnalysisViewModel by viewModels()
@@ -69,6 +77,14 @@ class MainActivity : AppCompatActivity() {
 
         // 通知チャンネルを作成
         SimpleNotification.createChannel(this)
+
+        // Android 13+: POST_NOTIFICATIONS のランタイム権限をリクエスト
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         setupNavigation()
         setupSwipeGesture()

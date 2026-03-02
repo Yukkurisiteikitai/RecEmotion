@@ -17,6 +17,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
@@ -48,17 +49,20 @@ class LLMInferenceServiceImpl @Inject constructor(
     private val _progress = MutableStateFlow(
         InferenceProgress(stage = LlmStage.IDLE, current = 0, total = 0, message = "Idle")
     )
-    override val progress: Flow<InferenceProgress> = _progress.asStateFlow()
+    override val progress: StateFlow<InferenceProgress> = _progress.asStateFlow()
 
     init {
         initModel()
     }
 
     private fun initModel() {
+        if (initJob?.isActive == true) {
+            Log.d(TAG, "[initModel] skipped — load already in progress")
+            return
+        }
         Log.d(TAG, "[initModel] starting")
         updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
 
-        initJob?.cancel()
         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
         llmInference = null
         isInitialized = false
@@ -132,7 +136,11 @@ class LLMInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override fun reloadModel() = initModel()
+    override fun reloadModel() {
+        Log.d(TAG, "[reloadModel] force-cancelling active initJob before reload")
+        initJob?.cancel()
+        initModel()
+    }
 
     private fun isModelInitialized(): Boolean = isInitialized
 
@@ -218,6 +226,7 @@ class LLMInferenceServiceImpl @Inject constructor(
             }
         }
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            ?: return null
         for (ext in supportedExtensions) {
             val f = File(downloadsDir, "model.$ext")
             if (f.exists() && f.length() > 0) {
