@@ -1,0 +1,2589 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index a234d07..80d4f18 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -83,6 +83,10 @@ android {
+     }
+ }
+ 
++ksp {
++    arg("room.schemaLocation", "$projectDir/schemas")
++}
++
+ dependencies {
+     implementation(libs.androidx.core.ktx)
+     implementation(libs.androidx.appcompat)
+diff --git a/app/schemas/com.example.recemotion.data.db.AppDatabase/4.json b/app/schemas/com.example.recemotion.data.db.AppDatabase/4.json
+new file mode 100644
+index 0000000..2396042
+--- /dev/null
++++ b/app/schemas/com.example.recemotion.data.db.AppDatabase/4.json
+@@ -0,0 +1,318 @@
++{
++  "formatVersion": 1,
++  "database": {
++    "version": 4,
++    "identityHash": "513bbca8e9a74b359129baa82d7e2c6c",
++    "entities": [
++      {
++        "tableName": "thought_entries",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `topic_id` INTEGER, `raw_text` TEXT NOT NULL, `tree_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`topic_id`) REFERENCES `conversation_topics`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "topicId",
++            "columnName": "topic_id",
++            "affinity": "INTEGER",
++            "notNull": false
++          },
++          {
++            "fieldPath": "rawText",
++            "columnName": "raw_text",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "treeJson",
++            "columnName": "tree_json",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "createdAt",
++            "columnName": "created_at",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_thought_entries_topic_id",
++            "unique": false,
++            "columnNames": [
++              "topic_id"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_thought_entries_topic_id` ON `${TABLE_NAME}` (`topic_id`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "conversation_topics",
++            "onDelete": "SET NULL",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "topic_id"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "thought_analyses",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `entry_id` INTEGER NOT NULL, `analysis_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`entry_id`) REFERENCES `thought_entries`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "entryId",
++            "columnName": "entry_id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "analysisJson",
++            "columnName": "analysis_json",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "createdAt",
++            "columnName": "created_at",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_thought_analyses_entry_id",
++            "unique": false,
++            "columnNames": [
++              "entry_id"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_thought_analyses_entry_id` ON `${TABLE_NAME}` (`entry_id`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "thought_entries",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "entry_id"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "conversation_topics",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `is_resolved` INTEGER NOT NULL, `resolution_result` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "title",
++            "columnName": "title",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "isResolved",
++            "columnName": "is_resolved",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "resolutionResult",
++            "columnName": "resolution_result",
++            "affinity": "TEXT",
++            "notNull": false
++          },
++          {
++            "fieldPath": "createdAt",
++            "columnName": "created_at",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "updatedAt",
++            "columnName": "updated_at",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [],
++        "foreignKeys": []
++      },
++      {
++        "tableName": "todo_items",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `topic_id` INTEGER NOT NULL, `description` TEXT NOT NULL, `is_completed` INTEGER NOT NULL, `result_notes` TEXT, `created_at` INTEGER NOT NULL, FOREIGN KEY(`topic_id`) REFERENCES `conversation_topics`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "topicId",
++            "columnName": "topic_id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "description",
++            "columnName": "description",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "isCompleted",
++            "columnName": "is_completed",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "resultNotes",
++            "columnName": "result_notes",
++            "affinity": "TEXT",
++            "notNull": false
++          },
++          {
++            "fieldPath": "createdAt",
++            "columnName": "created_at",
++            "affinity": "INTEGER",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [
++          {
++            "name": "index_todo_items_topic_id",
++            "unique": false,
++            "columnNames": [
++              "topic_id"
++            ],
++            "orders": [],
++            "createSql": "CREATE INDEX IF NOT EXISTS `index_todo_items_topic_id` ON `${TABLE_NAME}` (`topic_id`)"
++          }
++        ],
++        "foreignKeys": [
++          {
++            "table": "conversation_topics",
++            "onDelete": "CASCADE",
++            "onUpdate": "NO ACTION",
++            "columns": [
++              "topic_id"
++            ],
++            "referencedColumns": [
++              "id"
++            ]
++          }
++        ]
++      },
++      {
++        "tableName": "emotion_timeline",
++        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `emotion` TEXT NOT NULL, `stressLevel` INTEGER NOT NULL, `energyLevel` INTEGER NOT NULL, `sessionDate` TEXT NOT NULL, `trigger` TEXT NOT NULL)",
++        "fields": [
++          {
++            "fieldPath": "id",
++            "columnName": "id",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "timestamp",
++            "columnName": "timestamp",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "emotion",
++            "columnName": "emotion",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "stressLevel",
++            "columnName": "stressLevel",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "energyLevel",
++            "columnName": "energyLevel",
++            "affinity": "INTEGER",
++            "notNull": true
++          },
++          {
++            "fieldPath": "sessionDate",
++            "columnName": "sessionDate",
++            "affinity": "TEXT",
++            "notNull": true
++          },
++          {
++            "fieldPath": "trigger",
++            "columnName": "trigger",
++            "affinity": "TEXT",
++            "notNull": true
++          }
++        ],
++        "primaryKey": {
++          "autoGenerate": true,
++          "columnNames": [
++            "id"
++          ]
++        },
++        "indices": [],
++        "foreignKeys": []
++      }
++    ],
++    "views": [],
++    "setupQueries": [
++      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
++      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '513bbca8e9a74b359129baa82d7e2c6c')"
++    ]
++  }
++}
+\ No newline at end of file
+diff --git a/app/src/main/cpp/cabocha_jni.cpp b/app/src/main/cpp/cabocha_jni.cpp
+index 4d02a69..cb2b5f5 100644
+--- a/app/src/main/cpp/cabocha_jni.cpp
++++ b/app/src/main/cpp/cabocha_jni.cpp
+@@ -54,8 +54,9 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeParse(
+     LOGI("nativeParse: mecabDic=%s, text_len=%zu", mecabDicDir, strlen(text));
+ 
+     // CaboCha 初期化引数を組み立て
++    // -r /dev/null: Android に cabocharc が存在しないため system rc をスキップ
+     // -m: dep model, -M: chunk model, -d: MeCab 辞書
+-    std::string args;
++    std::string args = "-r /dev/null";
+     if (mecabDicDir && mecabDicDir[0] != '\0') {
+         args += " -d ";
+         args += mecabDicDir;
+@@ -155,7 +156,7 @@ Java_com_example_recemotion_data_parser_NativeCabochaParser_nativeVerify(
+     const char* mecabDicDir    = env->GetStringUTFChars(jMecabDicDir,      nullptr);
+     const char* cabochaModelDir = env->GetStringUTFChars(jCabochaModelDir, nullptr);
+ 
+-    std::string args;
++    std::string args = "-r /dev/null";
+     if (mecabDicDir && mecabDicDir[0] != '\0') {
+         args += " -d ";
+         args += mecabDicDir;
+diff --git a/app/src/main/java/com/example/recemotion/ChatFragment.kt b/app/src/main/java/com/example/recemotion/ChatFragment.kt
+index a3794aa..99dc99a 100644
+--- a/app/src/main/java/com/example/recemotion/ChatFragment.kt
++++ b/app/src/main/java/com/example/recemotion/ChatFragment.kt
+@@ -20,9 +20,8 @@ import androidx.fragment.app.activityViewModels
+ import androidx.lifecycle.Lifecycle
+ import androidx.lifecycle.lifecycleScope
+ import androidx.lifecycle.repeatOnLifecycle
+-import com.example.recemotion.data.db.EmotionTimelineDao
+-import com.example.recemotion.data.db.EmotionTimelineEntity
+ import com.example.recemotion.databinding.FragmentChatBinding
++import com.example.recemotion.domain.repository.EmotionRepository
+ import com.example.recemotion.domain.model.LlmStage
+ import com.example.recemotion.presentation.ChatAdapter
+ import com.example.recemotion.presentation.ChatDisplayItem
+@@ -58,7 +57,7 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+     private lateinit var cameraExecutor: ExecutorService
+     private lateinit var emotionCursorDrawable: EmotionCursorDrawable
+ 
+-    @Inject lateinit var emotionTimelineDao: EmotionTimelineDao
++    @Inject lateinit var emotionRepository: EmotionRepository
+ 
+     // 現在の感情/ストレス状態 (onResults で更新)
+     private var currentEmotion = "Neutral"
+@@ -141,14 +140,12 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+             // 解析時点の感情をタイムラインに記録
+             val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+             viewLifecycleOwner.lifecycleScope.launch {
+-                emotionTimelineDao.insert(
+-                    EmotionTimelineEntity(
+-                        emotion = currentEmotion,
+-                        stressLevel = currentStress,
+-                        energyLevel = currentEnergy,
+-                        sessionDate = today,
+-                        trigger = "analysis"
+-                    )
++                emotionRepository.insert(
++                    emotion = currentEmotion,
++                    stressLevel = currentStress,
++                    energyLevel = currentEnergy,
++                    sessionDate = today,
++                    trigger = "analysis"
+                 )
+             }
+ 
+@@ -272,14 +269,12 @@ class ChatFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+             while (true) {
+                 delay(30_000L) // 30秒ごと
+                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+-                emotionTimelineDao.insert(
+-                    EmotionTimelineEntity(
+-                        emotion = currentEmotion,
+-                        stressLevel = currentStress,
+-                        energyLevel = currentEnergy,
+-                        sessionDate = today,
+-                        trigger = "periodic"
+-                    )
++                emotionRepository.insert(
++                    emotion = currentEmotion,
++                    stressLevel = currentStress,
++                    energyLevel = currentEnergy,
++                    sessionDate = today,
++                    trigger = "periodic"
+                 )
+             }
+         }
+diff --git a/app/src/main/java/com/example/recemotion/FaceLandmarkerHelper.kt b/app/src/main/java/com/example/recemotion/FaceLandmarkerHelper.kt
+index e3c2c18..70f3f4e 100644
+--- a/app/src/main/java/com/example/recemotion/FaceLandmarkerHelper.kt
++++ b/app/src/main/java/com/example/recemotion/FaceLandmarkerHelper.kt
+@@ -85,7 +85,9 @@ class FaceLandmarkerHelper(
+     }
+ 
+     private fun returnLivestreamError(error: RuntimeException) {
+-        faceLandmarkerHelperListener?.onError(error.message ?: "An unknown error has occurred")
++        val msg = "${error.javaClass.simpleName}: ${error.message ?: "null"}"
++        Log.e(TAG, "Livestream error", error)
++        faceLandmarkerHelperListener?.onError(msg)
+     }
+ 
+     interface LandmarkerListener {
+diff --git a/app/src/main/java/com/example/recemotion/MainActivity.kt b/app/src/main/java/com/example/recemotion/MainActivity.kt
+index 93feab4..7b1c9fd 100644
+--- a/app/src/main/java/com/example/recemotion/MainActivity.kt
++++ b/app/src/main/java/com/example/recemotion/MainActivity.kt
+@@ -11,7 +11,7 @@ import androidx.core.view.GravityCompat
+ import androidx.lifecycle.Lifecycle
+ import androidx.lifecycle.lifecycleScope
+ import androidx.lifecycle.repeatOnLifecycle
+-import com.example.recemotion.data.db.ConversationTopicEntity
++import com.example.recemotion.domain.model.ConversationTopic
+ import com.example.recemotion.databinding.ActivityMainBinding
+ import com.example.recemotion.presentation.ThoughtAnalysisViewModel
+ import com.example.recemotion.settings.SetupSettingsStore
+@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
+         }
+     }
+ 
+-    private fun updateTopicsInDrawer(topics: List<ConversationTopicEntity>) {
++    private fun updateTopicsInDrawer(topics: List<ConversationTopic>) {
+         val menu = binding.navView.menu
+         menu.removeGroup(TOPIC_GROUP_ID)
+         topicMenuIdMap.clear()
+diff --git a/app/src/main/java/com/example/recemotion/MainScreenFragment.kt b/app/src/main/java/com/example/recemotion/MainScreenFragment.kt
+index 4e4b9ad..a2493ad 100644
+--- a/app/src/main/java/com/example/recemotion/MainScreenFragment.kt
++++ b/app/src/main/java/com/example/recemotion/MainScreenFragment.kt
+@@ -26,7 +26,7 @@ import androidx.lifecycle.repeatOnLifecycle
+ import com.example.recemotion.data.parser.CabochaDependencyParser
+ import com.example.recemotion.data.parser.CabochaModelManager
+ import com.example.recemotion.data.parser.DictionaryManager
+-import com.example.recemotion.data.parser.LogicalFlowAnalyzer
++import com.example.recemotion.data.parser.LogicalFlowAnalyzerImpl
+ import com.example.recemotion.data.parser.LogicalFlowQuestionGenerator
+ import com.example.recemotion.data.parser.LogicalFlowReportBuilder
+ import com.example.recemotion.data.parser.NativeCabochaParser
+@@ -42,9 +42,11 @@ import com.example.recemotion.settings.SetupSettingsStore
+ import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
+ import dagger.hilt.android.AndroidEntryPoint
+ import javax.inject.Inject
++import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.suspendCancellableCoroutine
++import kotlinx.coroutines.withContext
+ import org.json.JSONObject
+ import java.io.FileOutputStream
+ import java.util.Calendar
+@@ -69,6 +71,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+     private lateinit var conversationAdapter: ConversationAdapter
+ 
+     @Inject lateinit var setupSettings: SetupSettingsStore
++    @Inject lateinit var flowAnalyzerImpl: LogicalFlowAnalyzerImpl
+ 
+     private var wakeTimeUnix: Long = 0
+ 
+@@ -145,7 +148,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+                 binding.overlayCalibration.visibility = View.GONE
+             } else {
+                 wakeTimeUnix = defaultWakeTimeUnix()
+-                MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
++                withContext(Dispatchers.IO) {
++                    MainActivity.initSessionSafe(wakeTimeUnix, priority = 1)
++                }
+                 // 本日未セットアップの場合はキャリブレーション用オーバーレイを明示的に表示
+                 binding.overlayCalibration.visibility = View.VISIBLE
+             }
+@@ -662,8 +667,8 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
+         viewLifecycleOwner.lifecycleScope.launch {
+             try {
+                 // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
+-                val analyzer = LogicalFlowAnalyzer(nativeParser)
+-                val analysis = analyzer.analyze(text)
++                flowAnalyzerImpl.nativeParser = nativeParser
++                val analysis = flowAnalyzerImpl.analyze(text)
+                 val reportBuilder = LogicalFlowReportBuilder()
+ 
+                 binding.progressContainer.visibility = View.GONE
+diff --git a/app/src/main/java/com/example/recemotion/data/db/AppDatabase.kt b/app/src/main/java/com/example/recemotion/data/db/AppDatabase.kt
+index 0a624a3..da7445e 100644
+--- a/app/src/main/java/com/example/recemotion/data/db/AppDatabase.kt
++++ b/app/src/main/java/com/example/recemotion/data/db/AppDatabase.kt
+@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
+         EmotionTimelineEntity::class
+     ],
+     version = 4,
+-    exportSchema = false
++    exportSchema = true
+ )
+ abstract class AppDatabase : RoomDatabase() {
+ 
+@@ -34,7 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
+                     AppDatabase::class.java,
+                     "recemotion.db"
+                 )
+-                    .fallbackToDestructiveMigration()
++                    // TODO: Add explicit migrations when bumping DB version to prevent data loss
+                     .build()
+                     .also { INSTANCE = it }
+             }
+diff --git a/app/src/main/java/com/example/recemotion/data/di/DatabaseModule.kt b/app/src/main/java/com/example/recemotion/data/di/DatabaseModule.kt
+index 7d9d199..6845ba6 100644
+--- a/app/src/main/java/com/example/recemotion/data/di/DatabaseModule.kt
++++ b/app/src/main/java/com/example/recemotion/data/di/DatabaseModule.kt
+@@ -23,18 +23,18 @@ object DatabaseModule {
+     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
+         AppDatabase.getInstance(context)
+ 
+-    @Provides
++    @Provides @Singleton
+     fun provideThoughtEntryDao(db: AppDatabase): ThoughtEntryDao = db.thoughtEntryDao()
+ 
+-    @Provides
++    @Provides @Singleton
+     fun provideThoughtAnalysisDao(db: AppDatabase): ThoughtAnalysisDao = db.thoughtAnalysisDao()
+ 
+-    @Provides
++    @Provides @Singleton
+     fun provideConversationTopicDao(db: AppDatabase): ConversationTopicDao = db.conversationTopicDao()
+ 
+-    @Provides
++    @Provides @Singleton
+     fun provideToDoDao(db: AppDatabase): ToDoDao = db.todoDao()
+ 
+-    @Provides
++    @Provides @Singleton
+     fun provideEmotionTimelineDao(db: AppDatabase): EmotionTimelineDao = db.emotionTimelineDao()
+ }
+diff --git a/app/src/main/java/com/example/recemotion/data/di/RepositoryModule.kt b/app/src/main/java/com/example/recemotion/data/di/RepositoryModule.kt
+index 6d7d289..97ad957 100644
+--- a/app/src/main/java/com/example/recemotion/data/di/RepositoryModule.kt
++++ b/app/src/main/java/com/example/recemotion/data/di/RepositoryModule.kt
+@@ -1,6 +1,8 @@
+ package com.example.recemotion.data.di
+ 
++import com.example.recemotion.data.repository.EmotionRepositoryImpl
+ import com.example.recemotion.data.repository.ThoughtRepositoryImpl
++import com.example.recemotion.domain.repository.EmotionRepository
+ import com.example.recemotion.domain.repository.ThoughtRepository
+ import dagger.Binds
+ import dagger.Module
+@@ -12,7 +14,9 @@ import javax.inject.Singleton
+ @InstallIn(SingletonComponent::class)
+ abstract class RepositoryModule {
+ 
+-    @Binds
+-    @Singleton
++    @Binds @Singleton
+     abstract fun bindThoughtRepository(impl: ThoughtRepositoryImpl): ThoughtRepository
++
++    @Binds @Singleton
++    abstract fun bindEmotionRepository(impl: EmotionRepositoryImpl): EmotionRepository
+ }
+diff --git a/app/src/main/java/com/example/recemotion/data/di/ServiceModule.kt b/app/src/main/java/com/example/recemotion/data/di/ServiceModule.kt
+index 8396933..18842fc 100644
+--- a/app/src/main/java/com/example/recemotion/data/di/ServiceModule.kt
++++ b/app/src/main/java/com/example/recemotion/data/di/ServiceModule.kt
+@@ -1,8 +1,18 @@
+ package com.example.recemotion.data.di
+ 
+ import com.example.recemotion.data.llm.LLMInferenceServiceImpl
++import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
++import com.example.recemotion.data.llm.ThoughtPromptBuilder
+ import com.example.recemotion.data.parser.LogicalFlowAnalyzerImpl
++import com.example.recemotion.data.parser.ResourceCheckerImpl
++import com.example.recemotion.data.parser.ThoughtStructureParserAdapter
+ import com.example.recemotion.data.parser.TopicChangeDetectorImpl
++import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
++import com.example.recemotion.domain.service.IPromptBuilder
++import com.example.recemotion.domain.service.IResourceChecker
++import com.example.recemotion.domain.service.IThoughtJsonParser
++import com.example.recemotion.domain.service.IThoughtStructureParser
++import com.example.recemotion.domain.service.IThoughtStructureSerializer
+ import com.example.recemotion.domain.service.LLMInferenceService
+ import com.example.recemotion.domain.service.LogicalFlowService
+ import com.example.recemotion.domain.service.TopicChangeService
+@@ -16,15 +26,27 @@ import javax.inject.Singleton
+ @InstallIn(SingletonComponent::class)
+ abstract class ServiceModule {
+ 
+-    @Binds
+-    @Singleton
++    @Binds @Singleton
+     abstract fun bindLLMInferenceService(impl: LLMInferenceServiceImpl): LLMInferenceService
+ 
+-    @Binds
+-    @Singleton
++    @Binds @Singleton
+     abstract fun bindLogicalFlowService(impl: LogicalFlowAnalyzerImpl): LogicalFlowService
+ 
+-    @Binds
+-    @Singleton
++    @Binds @Singleton
+     abstract fun bindTopicChangeService(impl: TopicChangeDetectorImpl): TopicChangeService
++
++    @Binds @Singleton
++    abstract fun bindThoughtStructureParser(impl: ThoughtStructureParserAdapter): IThoughtStructureParser
++
++    @Binds @Singleton
++    abstract fun bindPromptBuilder(impl: ThoughtPromptBuilder): IPromptBuilder
++
++    @Binds @Singleton
++    abstract fun bindThoughtJsonParser(impl: ThoughtAnalysisJsonParser): IThoughtJsonParser
++
++    @Binds @Singleton
++    abstract fun bindThoughtStructureSerializer(impl: ThoughtStructureJsonAdapter): IThoughtStructureSerializer
++
++    @Binds @Singleton
++    abstract fun bindResourceChecker(impl: ResourceCheckerImpl): IResourceChecker
+ }
+diff --git a/app/src/main/java/com/example/recemotion/data/llm/InferenceProgress.kt b/app/src/main/java/com/example/recemotion/data/llm/InferenceProgress.kt
+deleted file mode 100644
+index c08c1cd..0000000
+--- a/app/src/main/java/com/example/recemotion/data/llm/InferenceProgress.kt
++++ /dev/null
+@@ -1,5 +0,0 @@
+-package com.example.recemotion.data.llm
+-
+-// Moved to domain/model/InferenceProgress.kt — re-exported here for backwards compatibility.
+-typealias LlmStage = com.example.recemotion.domain.model.LlmStage
+-typealias InferenceProgress = com.example.recemotion.domain.model.InferenceProgress
+diff --git a/app/src/main/java/com/example/recemotion/data/llm/LLMInferenceServiceImpl.kt b/app/src/main/java/com/example/recemotion/data/llm/LLMInferenceServiceImpl.kt
+index d67f54f..3821ff6 100644
+--- a/app/src/main/java/com/example/recemotion/data/llm/LLMInferenceServiceImpl.kt
++++ b/app/src/main/java/com/example/recemotion/data/llm/LLMInferenceServiceImpl.kt
+@@ -3,6 +3,8 @@ package com.example.recemotion.data.llm
+ import android.content.Context
+ import android.os.Environment
+ import android.util.Log
++import com.example.recemotion.domain.model.InferenceProgress
++import com.example.recemotion.domain.model.LlmStage
+ import com.example.recemotion.domain.model.LlmStreamEvent
+ import com.example.recemotion.domain.service.LLMInferenceService
+ import com.google.mediapipe.tasks.genai.llminference.LlmInference
+@@ -15,8 +17,6 @@ import kotlinx.coroutines.channels.BufferOverflow
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.MutableSharedFlow
+ import kotlinx.coroutines.flow.MutableStateFlow
+-import kotlinx.coroutines.flow.SharedFlow
+-import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asSharedFlow
+ import kotlinx.coroutines.flow.asStateFlow
+ import kotlinx.coroutines.flow.flow
+@@ -43,14 +43,18 @@ class LLMInferenceServiceImpl @Inject constructor(
+         extraBufferCapacity = 1,
+         onBufferOverflow = BufferOverflow.DROP_OLDEST
+     )
+-    override val partialResults: SharedFlow<String> = _partialResults.asSharedFlow()
++    override val partialResults: Flow<String> = _partialResults.asSharedFlow()
+ 
+     private val _progress = MutableStateFlow(
+         InferenceProgress(stage = LlmStage.IDLE, current = 0, total = 0, message = "Idle")
+     )
+-    override val progress: StateFlow<InferenceProgress> = _progress.asStateFlow()
++    override val progress: Flow<InferenceProgress> = _progress.asStateFlow()
+ 
+-    override fun initModel() {
++    init {
++        initModel()
++    }
++
++    private fun initModel() {
+         Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
+         updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
+ 
+@@ -74,6 +78,18 @@ class LLMInferenceServiceImpl @Inject constructor(
+             return
+         }
+ 
++        // Validate file format before passing to native MediaPipe to prevent process abort.
++        // .task files must be ZIP archives (magic PK\x03\x04).
++        // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
++        val formatError = checkModelFileFormat(modelFile)
++        if (formatError != null) {
++            Log.e(TAG, "2/5 [initModel] format_check: $formatError")
++            _partialResults.tryEmit("Error: $formatError")
++            updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
++            isInitialized = false
++            return
++        }
++
+         initJob?.cancel()
+         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
+         llmInference = null
+@@ -106,14 +122,18 @@ class LLMInferenceServiceImpl @Inject constructor(
+             } catch (e: Exception) {
+                 if (!isActive) return@launch
+                 Log.e(TAG, "4/5 [initModel] model_load: FAILED", e)
+-                _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n${e.localizedMessage ?: "Unknown error"}")
++                val detail = "${e.javaClass.simpleName}: ${e.message ?: "null"}"
++                Log.e(TAG, "model_load: FAILED detail=$detail", e)
++                _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n$detail")
+                 updateProgress(stage = LlmStage.ERROR, message = "Error: failed to initialize model")
+                 isInitialized = false
+             }
+         }
+     }
+ 
+-    override fun isModelInitialized(): Boolean = isInitialized
++    override fun reloadModel() = initModel()
++
++    private fun isModelInitialized(): Boolean = isInitialized
+ 
+     override fun generateResponse(prompt: String) {
+         Log.d(TAG, "1/4 [generateResponse] called: promptLen=${prompt.length}")
+@@ -152,8 +172,8 @@ class LLMInferenceServiceImpl @Inject constructor(
+         Log.d(TAG, "2/5 [analyzeThought] model_check: isInitialized=$isInitialized")
+         val inference = llmInference
+         if (!isInitialized || inference == null) {
+-            Log.w(TAG, "2/5 [analyzeThought] model_check: not ready → TestLLMInference")
+-            com.example.recemotion.TestLLMInference.analyzeThoughtStructure(prompt).collect { emit(it) }
++            Log.w(TAG, "2/5 [analyzeThought] model_check: not ready")
++            emit(LlmStreamEvent.Error("LLM model is not initialized. Please ensure a valid model file is present."))
+             return@flow
+         }
+ 
+@@ -170,13 +190,13 @@ class LLMInferenceServiceImpl @Inject constructor(
+             emit(LlmStreamEvent.Done(result))
+             updateProgress(LlmStage.DONE, message = "Done")
+         } catch (e: Exception) {
+-            Log.e(TAG, "4/5 [analyzeThought] generating: ERROR → TestLLMInference", e)
++            Log.e(TAG, "4/5 [analyzeThought] generating: ERROR", e)
+             updateProgress(LlmStage.ERROR, message = "Error: inference failed")
+-            com.example.recemotion.TestLLMInference.analyzeThoughtStructure(prompt).collect { emit(it) }
++            emit(LlmStreamEvent.Error("Inference failed: ${e.javaClass.simpleName}: ${e.message ?: "null"}"))
+         }
+     }.flowOn(Dispatchers.IO)
+ 
+-    override fun close() {
++    private fun close() {
+         initJob?.cancel()
+         initJob = null
+         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "close: error", e) }
+@@ -274,6 +294,43 @@ class LLMInferenceServiceImpl @Inject constructor(
+         )
+     }
+ 
++    /**
++     * Returns a human-readable error string if the model file format is incompatible,
++     * or null if the file looks acceptable.
++     * This check runs BEFORE passing to native MediaPipe to prevent process abort on bad format.
++     */
++    private fun checkModelFileFormat(file: File): String? {
++        val header = ByteArray(8)
++        try {
++            file.inputStream().use { it.read(header) }
++        } catch (e: Exception) {
++            return "Cannot read model file: ${e.message}"
++        }
++
++        // ZIP magic: PK\x03\x04 (MediaPipe .task bundles and some .bin formats)
++        val isZip = header[0] == 0x50.toByte() && header[1] == 0x4B.toByte() &&
++                    header[2] == 0x03.toByte() && header[3] == 0x04.toByte()
++
++        // GGUF magic: "GGUF" (incompatible with MediaPipe LiteRT LM)
++        val isGguf = header[0] == 0x47.toByte() && header[1] == 0x47.toByte() &&
++                     header[2] == 0x55.toByte() && header[3] == 0x46.toByte()
++
++        if (isGguf) {
++            return "Incompatible model format (GGUF). " +
++                   "MediaPipe requires a Gemma .task file from Google AI Edge: " +
++                   "https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference/android#models"
++        }
++
++        if (file.extension == "task" && !isZip) {
++            val hex = header.take(4).joinToString(" ") { "%02X".format(it) }
++            return "Invalid .task file (expected ZIP, got [$hex]). " +
++                   "Re-download from Google AI Edge model gallery."
++        }
++
++        Log.d(TAG, "format_check: ext=${file.extension} isZip=$isZip header=${header.take(4).map { "%02X".format(it) }}")
++        return null
++    }
++
+     companion object {
+         private const val TAG = "LLMInferenceServiceImpl"
+         private const val MAX_TOTAL_TOKENS = 1024
+diff --git a/app/src/main/java/com/example/recemotion/data/llm/LlmStreamEvent.kt b/app/src/main/java/com/example/recemotion/data/llm/LlmStreamEvent.kt
+deleted file mode 100644
+index aaa26c7..0000000
+--- a/app/src/main/java/com/example/recemotion/data/llm/LlmStreamEvent.kt
++++ /dev/null
+@@ -1,4 +0,0 @@
+-package com.example.recemotion.data.llm
+-
+-// Moved to domain/model/LlmStreamEvent.kt — re-exported here for backwards compatibility.
+-typealias LlmStreamEvent = com.example.recemotion.domain.model.LlmStreamEvent
+diff --git a/app/src/main/java/com/example/recemotion/data/llm/ThoughtAnalysisJsonParser.kt b/app/src/main/java/com/example/recemotion/data/llm/ThoughtAnalysisJsonParser.kt
+index 3cab3d1..6a4c24a 100644
+--- a/app/src/main/java/com/example/recemotion/data/llm/ThoughtAnalysisJsonParser.kt
++++ b/app/src/main/java/com/example/recemotion/data/llm/ThoughtAnalysisJsonParser.kt
+@@ -4,6 +4,7 @@ import com.example.recemotion.domain.model.Assumption
+ import com.example.recemotion.domain.model.BiasDetection
+ import com.example.recemotion.domain.model.MissingPerspective
+ import com.example.recemotion.domain.model.ThoughtAnalysisResult
++import com.example.recemotion.domain.service.IThoughtJsonParser
+ import org.json.JSONArray
+ import org.json.JSONObject
+ import javax.inject.Inject
+@@ -11,9 +12,9 @@ import javax.inject.Inject
+ /**
+  * Parses the strict JSON response from the LLM.
+  */
+-class ThoughtAnalysisJsonParser @Inject constructor() {
++class ThoughtAnalysisJsonParser @Inject constructor() : IThoughtJsonParser {
+ 
+-    fun parse(jsonText: String): ThoughtAnalysisResult {
++    override fun parse(jsonText: String): ThoughtAnalysisResult {
+         val root = JSONObject(extractJson(jsonText))
+         return ThoughtAnalysisResult(
+             premises = readStringArray(root.optJSONArray("premises")),
+diff --git a/app/src/main/java/com/example/recemotion/data/llm/ThoughtPromptBuilder.kt b/app/src/main/java/com/example/recemotion/data/llm/ThoughtPromptBuilder.kt
+index 96dbf8c..fa11c84 100644
+--- a/app/src/main/java/com/example/recemotion/data/llm/ThoughtPromptBuilder.kt
++++ b/app/src/main/java/com/example/recemotion/data/llm/ThoughtPromptBuilder.kt
+@@ -2,12 +2,13 @@ package com.example.recemotion.data.llm
+ 
+ import com.example.recemotion.domain.model.ThoughtNode
+ import com.example.recemotion.domain.model.ThoughtStructure
++import com.example.recemotion.domain.service.IPromptBuilder
+ import javax.inject.Inject
+ 
+ /**
+  * Builds a strict JSON-only prompt for thought analysis.
+  */
+-class ThoughtPromptBuilder @Inject constructor() {
++class ThoughtPromptBuilder @Inject constructor() : IPromptBuilder {
+ 
+     /**
+      * 通常の解析プロンプトを構築する。
+@@ -16,7 +17,7 @@ class ThoughtPromptBuilder @Inject constructor() {
+      * @param emotionContext 感情タイムラインのログ文字列（省略可）。
+      *   渡された場合はプロンプトに「Emotion State Log」セクションとして追記する。
+      */
+-    fun build(structure: ThoughtStructure, emotionContext: String? = null): String {
++    override fun build(structure: ThoughtStructure, emotionContext: String?): String {
+         val treeText = buildIndentedText(structure)
+         val emotionSection = if (!emotionContext.isNullOrBlank()) {
+             "\nEmotion State Log (facial emotion captured during input):\n$emotionContext\n"
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzer.kt b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzer.kt
+deleted file mode 100644
+index 8b16a3d..0000000
+--- a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzer.kt
++++ /dev/null
+@@ -1,430 +0,0 @@
+-package com.example.recemotion.data.parser
+-
+-import android.util.Log
+-import com.atilika.kuromoji.ipadic.Token
+-import com.atilika.kuromoji.ipadic.Tokenizer
+-import com.example.recemotion.domain.model.AnalyzedSentence
+-import com.example.recemotion.domain.model.EntityInfo
+-import com.example.recemotion.domain.model.EntityType
+-import com.example.recemotion.domain.model.LogicalFlowAnalysis
+-import com.example.recemotion.domain.model.LogicalRelation
+-import com.example.recemotion.domain.model.MorphemeInfo
+-import com.example.recemotion.domain.model.RelationType
+-import com.example.recemotion.domain.model.SentenceStructure
+-import kotlinx.coroutines.Dispatchers
+-import kotlinx.coroutines.withContext
+-
+-/**
+- * 論理フロー解析エンジン。
+- *
+- * [nativeParser] が null の場合は Kuromoji（形態素ベース）で解析する。
+- * [nativeParser] が渡された場合は NativeCabochaParser（チャンクベース）で解析する。
+- *
+- * Phase 1: 各文の解析 → 主語・述語・目的語・時間マーカー・エンティティを抽出
+- * Phase 2: 文間の論理関係（時系列/因果/対比/継続/具体例）を接続詞から検出
+- */
+-class LogicalFlowAnalyzer(
+-    private val nativeParser: NativeCabochaParser? = null
+-) {
+-
+-    private val tokenizer by lazy { Tokenizer() }
+-
+-    companion object {
+-        private const val TAG = "LogicalFlowAnalyzer"
+-
+-        private val SENTENCE_ENDS = setOf('。', '！', '？', '.', '!', '?')
+-
+-        /** 時間マーカーのホワイトリスト */
+-        private val TIME_MARKERS = setOf(
+-            "去年", "昨年", "今年", "来年", "先月", "今月", "来月",
+-            "昨日", "今日", "明日", "今朝", "今夜", "今週", "先週",
+-            "その後", "その時", "その際", "次に", "まず", "最初に",
+-            "それから", "しばらく", "ずっと", "当時", "以来", "以前",
+-            "最近", "かつて", "かねて", "最終的に", "最終的"
+-        )
+-
+-        /** 人称代名詞リスト */
+-        private val PERSON_PRONOUNS = setOf(
+-            "私", "僕", "俺", "彼", "彼女", "あなた", "君", "彼ら",
+-            "私たち", "自分", "われ", "わたくし", "うち"
+-        )
+-
+-        // ── 文間接続詞マップ（接続詞 → 信頼度） ──────────────────────
+-
+-        private val TEMPORAL_CONNECTORS = mapOf(
+-            "その後" to 95, "それから" to 95, "次に" to 90,
+-            "まず" to 88, "最初に" to 88, "その次" to 88,
+-            "しばらくして" to 85, "やがて" to 82, "続いて" to 82,
+-            "一方で" to 75, "並行して" to 75
+-        )
+-
+-        private val CAUSAL_CONNECTORS = mapOf(
+-            "なぜなら" to 95, "だから" to 92, "それで" to 90,
+-            "そのため" to 90, "その結果" to 92, "ゆえに" to 90,
+-            "したがって" to 90, "よって" to 88, "このため" to 88,
+-            "それゆえ" to 85, "ために" to 72
+-        )
+-
+-        private val CONTRAST_CONNECTORS = mapOf(
+-            "しかし" to 95, "でも" to 90, "一方" to 88,
+-            "ところが" to 90, "けれども" to 88, "ただし" to 85,
+-            "それでも" to 82, "むしろ" to 80, "とはいえ" to 80,
+-            "他方" to 85, "ところで" to 68
+-        )
+-
+-        private val CONTINUATION_CONNECTORS = mapOf(
+-            "また" to 85, "そして" to 85, "さらに" to 85,
+-            "加えて" to 85, "しかも" to 80, "それに" to 80,
+-            "なお" to 75
+-        )
+-
+-        private val EXEMPLIFICATION_CONNECTORS = mapOf(
+-            "例えば" to 95, "たとえば" to 95, "具体的には" to 92,
+-            "実際に" to 80, "特に" to 72, "とりわけ" to 72
+-        )
+-
+-        private val ALL_CONNECTOR_MAPS = listOf(
+-            TEMPORAL_CONNECTORS to RelationType.TEMPORAL,
+-            CAUSAL_CONNECTORS to RelationType.CAUSAL,
+-            CONTRAST_CONNECTORS to RelationType.CONTRAST,
+-            CONTINUATION_CONNECTORS to RelationType.CONTINUATION,
+-            EXEMPLIFICATION_CONNECTORS to RelationType.EXEMPLIFICATION
+-        )
+-    }
+-
+-    // ─── 公開メソッド ──────────────────────────────────────────────
+-
+-    suspend fun analyze(text: String): LogicalFlowAnalysis = withContext(Dispatchers.Default) {
+-        val rawSentences = splitSentences(text)
+-        Log.d(TAG, "Split into ${rawSentences.size} sentences (parser=${if (nativeParser != null) "CaboCha" else "Kuromoji"})")
+-
+-        val analyzed = if (nativeParser != null) {
+-            analyzeWithNative(rawSentences)
+-        } else {
+-            rawSentences.mapIndexed { idx, s -> analyzeSentence(idx, s) }
+-        }
+-        val relations = detectRelations(analyzed, rawSentences)
+-        val overallFlow = buildOverallFlow(analyzed)
+-
+-        LogicalFlowAnalysis(analyzed, relations, overallFlow)
+-    }
+-
+-    // ─── NativeCabochaParser（チャンクベース）解析 ──────────────────────
+-
+-    private suspend fun analyzeWithNative(sentences: List<String>): List<AnalyzedSentence> {
+-        return sentences.mapIndexed { idx, s ->
+-            try {
+-                val result = nativeParser!!.parse(s)
+-                val morphemes = result.chunks.flatMap { chunk ->
+-                    chunk.tokens.map { token ->
+-                        MorphemeInfo(
+-                            surface = token.surface,
+-                            pos    = token.pos,
+-                            pos2   = "",           // NativeCabochaParser は pos2 を持たない
+-                            baseForm = token.surface
+-                        )
+-                    }
+-                }
+-                AnalyzedSentence(
+-                    sentenceId  = idx,
+-                    originalText = s,
+-                    morphemes   = morphemes,
+-                    structure   = SentenceStructure(
+-                        subject = extractSubjectFromChunks(result.chunks),
+-                        verb    = extractVerbFromChunks(result.chunks),
+-                        obj     = extractObjectFromChunks(result.chunks)
+-                    ),
+-                    timeMarkers = detectTimeMarkersFromChunks(result.chunks),
+-                    entities    = extractEntitiesFromChunks(result.chunks)
+-                )
+-            } catch (e: Exception) {
+-                Log.e(TAG, "Failed to analyze sentence $idx with native parser: ${e.message}")
+-                AnalyzedSentence(
+-                    sentenceId = idx, originalText = s,
+-                    morphemes = emptyList(),
+-                    structure = SentenceStructure("", "", ""),
+-                    timeMarkers = emptyList(), entities = emptyList()
+-                )
+-            }
+-        }
+-    }
+-
+-    /** チャンク内で は/が の直前にあるトークン列を主語として返す */
+-    private fun extractSubjectFromChunks(chunks: List<CabochaChunk>): String {
+-        for (chunk in chunks) {
+-            for (i in 1 until chunk.tokens.size) {
+-                val tok = chunk.tokens[i]
+-                if (tok.pos == "助詞" && tok.surface in setOf("は", "が")) {
+-                    return chunk.tokens.take(i).joinToString("") { it.surface }
+-                }
+-            }
+-        }
+-        return ""
+-    }
+-
+-    /** ROOT チャンク（link=-1）の末尾動詞トークンを述語として返す */
+-    private fun extractVerbFromChunks(chunks: List<CabochaChunk>): String {
+-        val root = chunks.firstOrNull { it.link == -1 } ?: return ""
+-        return root.tokens.lastOrNull { it.pos == "動詞" }?.surface
+-            ?: root.tokens.lastOrNull()?.surface
+-            ?: ""
+-    }
+-
+-    /** チャンク内で を の直前にあるトークン列を目的語として返す */
+-    private fun extractObjectFromChunks(chunks: List<CabochaChunk>): String {
+-        for (chunk in chunks) {
+-            for (i in 1 until chunk.tokens.size) {
+-                val tok = chunk.tokens[i]
+-                if (tok.surface == "を" && tok.pos == "助詞") {
+-                    return chunk.tokens.take(i).joinToString("") { it.surface }
+-                }
+-            }
+-        }
+-        return ""
+-    }
+-
+-    private fun detectTimeMarkersFromChunks(chunks: List<CabochaChunk>): List<String> =
+-        chunks.flatMap { chunk ->
+-            chunk.tokens.filter { it.surface in TIME_MARKERS }.map { it.surface }
+-        }.distinct()
+-
+-    private fun extractEntitiesFromChunks(chunks: List<CabochaChunk>): List<EntityInfo> {
+-        val entities = mutableListOf<EntityInfo>()
+-        val seen = mutableSetOf<String>()
+-        for (chunk in chunks) {
+-            for (token in chunk.tokens) {
+-                val surface = token.surface
+-                if (surface in seen) continue
+-                when {
+-                    surface in PERSON_PRONOUNS -> {
+-                        entities.add(EntityInfo(EntityType.PERSON, surface))
+-                        seen.add(surface)
+-                    }
+-                    token.pos == "動詞" -> {
+-                        entities.add(EntityInfo(EntityType.ACTION, surface))
+-                        seen.add(surface)
+-                    }
+-                }
+-            }
+-        }
+-        return entities
+-    }
+-
+-    // ─── 文分割 ────────────────────────────────────────────────────
+-
+-    private fun splitSentences(text: String): List<String> {
+-        val result = mutableListOf<String>()
+-        val current = StringBuilder()
+-        for (char in text) {
+-            current.append(char)
+-            if (char in SENTENCE_ENDS) {
+-                val s = current.toString().trim()
+-                if (s.isNotEmpty()) result.add(s)
+-                current.clear()
+-            }
+-        }
+-        val remaining = current.toString().trim()
+-        if (remaining.isNotEmpty()) result.add(remaining)
+-        return result
+-    }
+-
+-    // ─── 1文の解析 ─────────────────────────────────────────────────
+-
+-    private fun analyzeSentence(id: Int, text: String): AnalyzedSentence {
+-        return try {
+-            val tokens = tokenizer.tokenize(text)
+-            val morphemes = tokens.map { tok ->
+-                MorphemeInfo(
+-                    surface = tok.surface,
+-                    pos = tok.partOfSpeechLevel1,
+-                    pos2 = tok.partOfSpeechLevel2,
+-                    baseForm = tok.baseForm
+-                )
+-            }
+-            AnalyzedSentence(
+-                sentenceId = id,
+-                originalText = text,
+-                morphemes = morphemes,
+-                structure = SentenceStructure(
+-                    subject = extractSubject(tokens),
+-                    verb = extractVerb(tokens),
+-                    obj = extractObject(tokens)
+-                ),
+-                timeMarkers = detectTimeMarkers(tokens),
+-                entities = extractEntities(tokens)
+-            )
+-        } catch (e: Exception) {
+-            Log.e(TAG, "Failed to analyze sentence $id: ${e.message}")
+-            AnalyzedSentence(
+-                sentenceId = id,
+-                originalText = text,
+-                morphemes = emptyList(),
+-                structure = SentenceStructure("", "", ""),
+-                timeMarkers = emptyList(),
+-                entities = emptyList()
+-            )
+-        }
+-    }
+-
+-    // ─── 主語抽出: は / が の直前の名詞連続を取得 ──────────────────
+-
+-    private fun extractSubject(tokens: List<Token>): String {
+-        for (i in 1 until tokens.size) {
+-            val tok = tokens[i]
+-            if (tok.partOfSpeechLevel1 == "助詞" && tok.surface in setOf("は", "が")) {
+-                val sb = StringBuilder()
+-                var j = i - 1
+-                while (j >= 0) {
+-                    val prev = tokens[j]
+-                    if (prev.partOfSpeechLevel1 == "名詞" || prev.surface in PERSON_PRONOUNS) {
+-                        sb.insert(0, prev.surface)
+-                        j--
+-                    } else break
+-                }
+-                val subject = sb.toString()
+-                if (subject.isNotEmpty()) return subject
+-            }
+-        }
+-        return ""
+-    }
+-
+-    // ─── 述語抽出: 文末から最初の自立動詞 ──────────────────────────
+-
+-    private fun extractVerb(tokens: List<Token>): String {
+-        for (tok in tokens.reversed()) {
+-            if (tok.partOfSpeechLevel1 == "動詞" && tok.partOfSpeechLevel2 != "非自立") {
+-                return tok.baseForm.takeIf { it.isNotBlank() } ?: tok.surface
+-            }
+-        }
+-        for (tok in tokens.reversed()) {
+-            if (tok.partOfSpeechLevel1 in listOf("形容詞", "形容動詞")) {
+-                return tok.baseForm.takeIf { it.isNotBlank() } ?: tok.surface
+-            }
+-        }
+-        return ""
+-    }
+-
+-    // ─── 目的語抽出: を の直前の名詞連続 ───────────────────────────
+-
+-    private fun extractObject(tokens: List<Token>): String {
+-        for (i in 1 until tokens.size) {
+-            if (tokens[i].surface == "を" && tokens[i].partOfSpeechLevel1 == "助詞") {
+-                val sb = StringBuilder()
+-                var j = i - 1
+-                while (j >= 0 && tokens[j].partOfSpeechLevel1 == "名詞") {
+-                    sb.insert(0, tokens[j].surface)
+-                    j--
+-                }
+-                val obj = sb.toString()
+-                if (obj.isNotEmpty()) return obj
+-            }
+-        }
+-        return ""
+-    }
+-
+-    // ─── 時間マーカー検出 ─────────────────────────────────────────
+-
+-    private fun detectTimeMarkers(tokens: List<Token>): List<String> {
+-        val markers = mutableListOf<String>()
+-        for (tok in tokens) {
+-            if (tok.surface in TIME_MARKERS) {
+-                markers.add(tok.surface)
+-                continue
+-            }
+-            // Kuromoji ipadic では名詞-副詞可能 に時相名詞が含まれることがある
+-            if (tok.partOfSpeechLevel1 == "名詞" &&
+-                tok.partOfSpeechLevel2 in listOf("時相名詞", "副詞可能")
+-            ) {
+-                if (tok.surface !in markers) markers.add(tok.surface)
+-            }
+-        }
+-        return markers.distinct()
+-    }
+-
+-    // ─── エンティティ抽出 ─────────────────────────────────────────
+-
+-    private fun extractEntities(tokens: List<Token>): List<EntityInfo> {
+-        val entities = mutableListOf<EntityInfo>()
+-        val seen = mutableSetOf<String>()
+-
+-        for (tok in tokens) {
+-            val surface = tok.surface
+-            if (surface in seen) continue
+-
+-            when {
+-                surface in PERSON_PRONOUNS -> {
+-                    entities.add(EntityInfo(EntityType.PERSON, surface))
+-                    seen.add(surface)
+-                }
+-                tok.partOfSpeechLevel1 == "名詞" &&
+-                        tok.partOfSpeechLevel2 in listOf("固有名詞", "組織") -> {
+-                    entities.add(EntityInfo(EntityType.ORGANIZATION, surface))
+-                    seen.add(surface)
+-                }
+-                tok.partOfSpeechLevel1 == "動詞" &&
+-                        tok.partOfSpeechLevel2 in listOf("自立", "") -> {
+-                    val base = tok.baseForm.takeIf { it.isNotBlank() } ?: surface
+-                    if (base !in seen) {
+-                        entities.add(EntityInfo(EntityType.ACTION, base))
+-                        seen.add(base)
+-                    }
+-                }
+-            }
+-        }
+-        return entities
+-    }
+-
+-    // ─── 文間の関係検出 ──────────────────────────────────────────
+-
+-    private fun detectRelations(
+-        sentences: List<AnalyzedSentence>,
+-        rawSentences: List<String>
+-    ): List<LogicalRelation> {
+-        return (0 until sentences.size - 1).map { i ->
+-            val nextText = rawSentences.getOrNull(i + 1) ?: ""
+-            val (relType, connector, confidence) = detectConnector(nextText)
+-            LogicalRelation(
+-                fromSentence = i,
+-                toSentence = i + 1,
+-                relationType = relType,
+-                connector = connector,
+-                confidence = confidence
+-            )
+-        }
+-    }
+-
+-    /**
+-     * テキストの先頭・内部から接続詞を検出し、関係種別・接続詞・信頼度を返す。
+-     * 先頭一致優先、なければ内部一致（信頼度 80%降格）。
+-     */
+-    private fun detectConnector(text: String): Triple<RelationType, String, Int> {
+-        val trimmed = text.trim()
+-
+-        // 先頭一致（高信頼）
+-        for ((connectors, relType) in ALL_CONNECTOR_MAPS) {
+-            for ((conn, conf) in connectors) {
+-                if (trimmed.startsWith(conn)) return Triple(relType, conn, conf)
+-            }
+-        }
+-        // 内部一致（信頼度を 80% に下げる）
+-        for ((connectors, relType) in ALL_CONNECTOR_MAPS) {
+-            for ((conn, conf) in connectors) {
+-                if (conn in trimmed) return Triple(relType, conn, (conf * 0.8).toInt())
+-            }
+-        }
+-
+-        return Triple(RelationType.CONTINUATION, "implicit", 40)
+-    }
+-
+-    // ─── 全体フローの概要文生成 ─────────────────────────────────
+-
+-    private fun buildOverallFlow(sentences: List<AnalyzedSentence>): List<String> {
+-        return sentences.map { s ->
+-            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
+-            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
+-            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
+-            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
+-            "$timePrefix$subj が ${objPart}${verb}"
+-        }
+-    }
+-}
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzerImpl.kt b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzerImpl.kt
+index 3a8bdfd..fde645d 100644
+--- a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzerImpl.kt
++++ b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowAnalyzerImpl.kt
+@@ -28,7 +28,7 @@ class LogicalFlowAnalyzerImpl @Inject constructor(
+     }
+ 
+     /** Optional native parser; can be set after async initialization. */
+-    var nativeParser: NativeCabochaParser? = null
++    internal var nativeParser: NativeCabochaParser? = null
+ 
+     override suspend fun analyze(text: String): LogicalFlowAnalysis = withContext(Dispatchers.Default) {
+         val rawSentences = sentenceTokenizer.split(text)
+@@ -38,18 +38,7 @@ class LogicalFlowAnalyzerImpl @Inject constructor(
+             morphemeAnalyzer.analyze(idx, s, nativeParser)
+         }
+         val relations = relationDetector.detect(analyzed, rawSentences)
+-        val overallFlow = buildOverallFlow(analyzed)
+ 
+-        LogicalFlowAnalysis(analyzed, relations, overallFlow)
+-    }
+-
+-    private fun buildOverallFlow(sentences: List<com.example.recemotion.domain.model.AnalyzedSentence>): List<String> {
+-        return sentences.map { s ->
+-            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
+-            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
+-            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
+-            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
+-            "$timePrefix$subj が ${objPart}${verb}"
+-        }
++        LogicalFlowAnalysis(analyzed, relations)
+     }
+ }
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowQuestionGenerator.kt b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowQuestionGenerator.kt
+index a34274e..3e1dc83 100644
+--- a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowQuestionGenerator.kt
++++ b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowQuestionGenerator.kt
+@@ -23,8 +23,14 @@ class LogicalFlowQuestionGenerator {
+         // ── Q1: 全体フローの確認（2文以上のとき） ────────────────
+ 
+         if (analysis.sentences.size > 1) {
+-            val flowText = analysis.overallFlow
+-                .mapIndexed { i, f -> "  ${i + 1}. $f" }
++            val flowText = analysis.sentences
++                .mapIndexed { i, s ->
++                    val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
++                    val subj = s.structure.subject.ifEmpty { "(主語不明)" }
++                    val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
++                    val verb = s.structure.verb.ifEmpty { "(述語不明)" }
++                    "  ${i + 1}. $timePrefix$subj が $objPart$verb"
++                }
+                 .joinToString("\n")
+             questions.add(
+                 VerificationQuestion(
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowReportBuilder.kt b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowReportBuilder.kt
+index bf12f4d..6cb9ae4 100644
+--- a/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowReportBuilder.kt
++++ b/app/src/main/java/com/example/recemotion/data/parser/LogicalFlowReportBuilder.kt
+@@ -65,8 +65,12 @@ class LogicalFlowReportBuilder {
+         // 全体フロー
+         append("\n───────────────────────\n")
+         append("【全体フロー（システム解釈）】\n")
+-        analysis.overallFlow.forEachIndexed { i, flow ->
+-            append("  ${i + 1}. $flow\n")
++        analysis.sentences.forEachIndexed { i, s ->
++            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
++            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
++            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
++            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
++            append("  ${i + 1}. $timePrefix$subj が ${objPart}${verb}\n")
+             if (i < analysis.relations.size) {
+                 val rel = analysis.relations[i]
+                 append("      ↓ (${rel.relationType.label})\n")
+@@ -234,8 +238,12 @@ class LogicalFlowReportBuilder {
+ 
+         // 全体フロー（検証後）
+         append("■ 全体の流れ（検証後）:\n")
+-        report.analysis.overallFlow.forEachIndexed { i, flow ->
+-            append("  ${i + 1}. $flow\n")
++        report.analysis.sentences.forEachIndexed { i, s ->
++            val timePrefix = if (s.timeMarkers.isNotEmpty()) "[${s.timeMarkers.first()}] " else ""
++            val subj = s.structure.subject.ifEmpty { "(主語不明)" }
++            val objPart = if (s.structure.obj.isNotEmpty()) "「${s.structure.obj}」を" else ""
++            val verb = s.structure.verb.ifEmpty { "(述語不明)" }
++            append("  ${i + 1}. $timePrefix$subj が ${objPart}${verb}\n")
+             if (i < report.analysis.relations.size) {
+                 val rel = report.analysis.relations[i]
+                 append("      ↓ (${rel.relationType.label})\n")
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/ResourceCheckerImpl.kt b/app/src/main/java/com/example/recemotion/data/parser/ResourceCheckerImpl.kt
+new file mode 100644
+index 0000000..6528d23
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/data/parser/ResourceCheckerImpl.kt
+@@ -0,0 +1,33 @@
++package com.example.recemotion.data.parser
++
++import android.content.Context
++import android.os.Environment
++import com.example.recemotion.domain.service.IResourceChecker
++import dagger.hilt.android.qualifiers.ApplicationContext
++import java.io.File
++import javax.inject.Inject
++
++class ResourceCheckerImpl @Inject constructor(
++    @ApplicationContext private val context: Context,
++    private val dictionaryManager: DictionaryManager,
++    private val cabochaModelManager: CabochaModelManager
++) : IResourceChecker {
++
++    override fun isDictionaryInstalled(): Boolean = dictionaryManager.isInstalled()
++
++    override fun isCabochaModelInstalled(): Boolean = cabochaModelManager.isInstalled()
++
++    override fun resolveLlmModelFile(): File? {
++        val supportedExtensions = listOf("bin", "task")
++        for (ext in supportedExtensions) {
++            val f = File(context.filesDir, "model.$ext")
++            if (f.exists() && f.length() > 0) return f
++        }
++        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
++        for (ext in supportedExtensions) {
++            val f = File(downloadsDir, "model.$ext")
++            if (f.exists() && f.length() > 0) return f
++        }
++        return null
++    }
++}
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/ThoughtStructureParserAdapter.kt b/app/src/main/java/com/example/recemotion/data/parser/ThoughtStructureParserAdapter.kt
+new file mode 100644
+index 0000000..0cb3c6e
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/data/parser/ThoughtStructureParserAdapter.kt
+@@ -0,0 +1,19 @@
++package com.example.recemotion.data.parser
++
++import com.example.recemotion.domain.model.ThoughtStructure
++import com.example.recemotion.domain.service.IThoughtStructureParser
++import javax.inject.Inject
++
++/**
++ * Adapts the DependencyParser + CabochaThoughtMapper pipeline to the domain [IThoughtStructureParser] interface.
++ */
++class ThoughtStructureParserAdapter @Inject constructor(
++    private val parser: DependencyParser,
++    private val mapper: CabochaThoughtMapper
++) : IThoughtStructureParser {
++
++    override suspend fun parse(text: String): ThoughtStructure {
++        val parsed = parser.parse(text)
++        return mapper.map(parsed)
++    }
++}
+diff --git a/app/src/main/java/com/example/recemotion/data/parser/TopicChangeDetectorImpl.kt b/app/src/main/java/com/example/recemotion/data/parser/TopicChangeDetectorImpl.kt
+index c69f325..46a0935 100644
+--- a/app/src/main/java/com/example/recemotion/data/parser/TopicChangeDetectorImpl.kt
++++ b/app/src/main/java/com/example/recemotion/data/parser/TopicChangeDetectorImpl.kt
+@@ -2,7 +2,9 @@ package com.example.recemotion.data.parser
+ 
+ import android.util.Log
+ import com.example.recemotion.domain.model.LogicalFlowAnalysis
++import com.example.recemotion.domain.service.TopicChangeResult
+ import com.example.recemotion.domain.service.TopicChangeService
++import org.json.JSONObject
+ import javax.inject.Inject
+ import javax.inject.Singleton
+ 
+@@ -38,6 +40,19 @@ class TopicChangeDetectorImpl @Inject constructor() : TopicChangeService {
+         return 1.0 - similarity
+     }
+ 
++    override fun parseTopicChangeResponse(llmResponse: String): TopicChangeResult {
++        return try {
++            val json = JSONObject(llmResponse)
++            TopicChangeResult(
++                isNewTopic = json.getBoolean("is_new_topic"),
++                suggestedTitle = json.optString("suggested_title", "New Topic")
++            )
++        } catch (e: Exception) {
++            Log.e(TAG, "Failed to parse LLM topic decision", e)
++            TopicChangeResult(isNewTopic = false)
++        }
++    }
++
+     override fun buildTopicChangePrompt(currentText: String, previousText: String): String = """
+ You are a conversation analyzer. Compare the two texts below and determine if they are discussing the same topic or if a new topic has started.
+ 
+diff --git a/app/src/main/java/com/example/recemotion/data/repository/EmotionRepositoryImpl.kt b/app/src/main/java/com/example/recemotion/data/repository/EmotionRepositoryImpl.kt
+new file mode 100644
+index 0000000..8a0514e
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/data/repository/EmotionRepositoryImpl.kt
+@@ -0,0 +1,51 @@
++package com.example.recemotion.data.repository
++
++import com.example.recemotion.data.db.EmotionTimelineDao
++import com.example.recemotion.data.db.EmotionTimelineEntity
++import com.example.recemotion.domain.model.EmotionEntry
++import com.example.recemotion.domain.repository.EmotionRepository
++import kotlinx.coroutines.flow.Flow
++import kotlinx.coroutines.flow.map
++import javax.inject.Inject
++
++class EmotionRepositoryImpl @Inject constructor(
++    private val dao: EmotionTimelineDao
++) : EmotionRepository {
++
++    override suspend fun insert(
++        emotion: String,
++        stressLevel: Int,
++        energyLevel: Int,
++        sessionDate: String,
++        trigger: String
++    ) {
++        dao.insert(
++            EmotionTimelineEntity(
++                emotion = emotion,
++                stressLevel = stressLevel,
++                energyLevel = energyLevel,
++                sessionDate = sessionDate,
++                trigger = trigger
++            )
++        )
++    }
++
++    override suspend fun getRecent(limit: Int): List<EmotionEntry> =
++        dao.getRecent(limit).map { it.toDomain() }
++
++    override fun getByDate(date: String): Flow<List<EmotionEntry>> =
++        dao.getByDate(date).map { list -> list.map { it.toDomain() } }
++
++    override suspend fun getAroundTime(startTime: Long, endTime: Long): List<EmotionEntry> =
++        dao.getAroundTime(startTime, endTime).map { it.toDomain() }
++
++    private fun EmotionTimelineEntity.toDomain() = EmotionEntry(
++        id = id,
++        timestamp = timestamp,
++        emotion = emotion,
++        stressLevel = stressLevel,
++        energyLevel = energyLevel,
++        sessionDate = sessionDate,
++        trigger = trigger
++    )
++}
+diff --git a/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepository.kt b/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepository.kt
+deleted file mode 100644
+index 72cdd1e..0000000
+--- a/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepository.kt
++++ /dev/null
+@@ -1,41 +0,0 @@
+-package com.example.recemotion.data.repository
+-
+-import com.example.recemotion.data.db.ConversationTopicDao
+-import com.example.recemotion.data.db.ThoughtAnalysisDao
+-import com.example.recemotion.data.db.ThoughtAnalysisEntity
+-import com.example.recemotion.data.db.ThoughtEntryDao
+-import com.example.recemotion.data.db.ThoughtEntryEntity
+-
+-class ThoughtRepository(
+-    private val entryDao: ThoughtEntryDao,
+-    private val analysisDao: ThoughtAnalysisDao,
+-    private val topicDao: ConversationTopicDao
+-) {
+-
+-    suspend fun storeEntry(topicId: Long?, rawText: String, treeJson: String, timestamp: Long): Long {
+-        val entry = ThoughtEntryEntity(
+-            topicId = topicId,
+-            rawText = rawText,
+-            treeJson = treeJson,
+-            createdAt = timestamp
+-        )
+-        return entryDao.insertEntry(entry)
+-    }
+-
+-    suspend fun updateEntry(entry: ThoughtEntryEntity) {
+-        entryDao.updateEntry(entry)
+-    }
+-
+-    suspend fun getEntryById(id: Long): ThoughtEntryEntity? {
+-        return entryDao.getEntryById(id)
+-    }
+-
+-    suspend fun storeAnalysis(entryId: Long, analysisJson: String, timestamp: Long): Long {
+-        val analysis = ThoughtAnalysisEntity(
+-            entryId = entryId,
+-            analysisJson = analysisJson,
+-            createdAt = timestamp
+-        )
+-        return analysisDao.insert(analysis)
+-    }
+-}
+diff --git a/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepositoryImpl.kt b/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepositoryImpl.kt
+index 334a5b4..75fa9c3 100644
+--- a/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepositoryImpl.kt
++++ b/app/src/main/java/com/example/recemotion/data/repository/ThoughtRepositoryImpl.kt
+@@ -8,14 +8,20 @@ import com.example.recemotion.data.db.ThoughtEntryDao
+ import com.example.recemotion.data.db.ThoughtEntryEntity
+ import com.example.recemotion.data.db.ToDoDao
+ import com.example.recemotion.data.db.ToDoEntity
++import com.example.recemotion.domain.model.ConversationTopic
++import com.example.recemotion.domain.model.ThoughtAnalysis
++import com.example.recemotion.domain.model.ThoughtEntry
++import com.example.recemotion.domain.model.ToDo
+ import com.example.recemotion.domain.repository.ThoughtRepository
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.first
++import kotlinx.coroutines.flow.map
+ import javax.inject.Inject
+ 
+ /**
+  * Concrete implementation of [ThoughtRepository].
+  * Delegates to Room DAOs; use-case and domain layers only see the interface.
++ * Performs Entity ↔ Domain Model mapping at this boundary.
+  */
+ class ThoughtRepositoryImpl @Inject constructor(
+     private val entryDao: ThoughtEntryDao,
+@@ -40,17 +46,17 @@ class ThoughtRepositoryImpl @Inject constructor(
+         entryDao.updateEntry(existing.copy(treeJson = treeJson))
+     }
+ 
+-    override suspend fun getEntryById(id: Long): ThoughtEntryEntity? =
+-        entryDao.getEntryById(id)
++    override suspend fun getEntryById(id: Long): ThoughtEntry? =
++        entryDao.getEntryById(id)?.toDomain()
+ 
+-    override suspend fun getLatestEntryForTopic(topicId: Long): ThoughtEntryEntity? =
+-        entryDao.getEntriesByTopic(topicId).first().firstOrNull()
++    override suspend fun getLatestEntryForTopic(topicId: Long): ThoughtEntry? =
++        entryDao.getEntriesByTopic(topicId).first().firstOrNull()?.toDomain()
+ 
+-    override fun getEntriesByTopic(topicId: Long): Flow<List<ThoughtEntryEntity>> =
+-        entryDao.getEntriesByTopic(topicId)
++    override fun getEntriesByTopic(topicId: Long): Flow<List<ThoughtEntry>> =
++        entryDao.getEntriesByTopic(topicId).map { list -> list.map { it.toDomain() } }
+ 
+-    override fun getAllEntries(): Flow<List<ThoughtEntryEntity>> =
+-        entryDao.getAllEntries()
++    override fun getAllEntries(): Flow<List<ThoughtEntry>> =
++        entryDao.getAllEntries().map { list -> list.map { it.toDomain() } }
+ 
+     // ── Analysis operations ───────────────────────────────────────────────
+ 
+@@ -59,21 +65,21 @@ class ThoughtRepositoryImpl @Inject constructor(
+             ThoughtAnalysisEntity(entryId = entryId, analysisJson = analysisJson, createdAt = timestamp)
+         )
+ 
+-    override suspend fun getAnalysisForEntry(entryId: Long): ThoughtAnalysisEntity? =
+-        analysisDao.getAnalysisForEntry(entryId)
++    override suspend fun getAnalysisForEntry(entryId: Long): ThoughtAnalysis? =
++        analysisDao.getAnalysisForEntry(entryId)?.toDomain()
+ 
+     // ── Topic operations ──────────────────────────────────────────────────
+ 
+-    override suspend fun getActiveTopic(): ConversationTopicEntity? =
+-        topicDao.getActiveTopic()
++    override suspend fun getActiveTopic(): ConversationTopic? =
++        topicDao.getActiveTopic()?.toDomain()
+ 
+     override suspend fun insertTopic(title: String, timestamp: Long): Long =
+         topicDao.insertTopic(
+             ConversationTopicEntity(title = title, createdAt = timestamp, updatedAt = timestamp)
+         )
+ 
+-    override suspend fun getTopicById(id: Long): ConversationTopicEntity? =
+-        topicDao.getTopicById(id)
++    override suspend fun getTopicById(id: Long): ConversationTopic? =
++        topicDao.getTopicById(id)?.toDomain()
+ 
+     override suspend fun updateTopicTimestamp(id: Long, timestamp: Long) {
+         val topic = topicDao.getTopicById(id) ?: return
+@@ -83,17 +89,52 @@ class ThoughtRepositoryImpl @Inject constructor(
+     override suspend fun resolveTopic(id: Long, result: String, timestamp: Long) =
+         topicDao.resolveTopic(id, result, timestamp)
+ 
+-    override fun getAllTopics(): Flow<List<ConversationTopicEntity>> =
+-        topicDao.getAllTopics()
++    override fun getAllTopics(): Flow<List<ConversationTopic>> =
++        topicDao.getAllTopics().map { list -> list.map { it.toDomain() } }
+ 
+     // ── ToDo operations ───────────────────────────────────────────────────
+ 
+-    override fun getAllToDos(): Flow<List<ToDoEntity>> =
+-        todoDao.getAllToDos()
++    override fun getAllToDos(): Flow<List<ToDo>> =
++        todoDao.getAllToDos().map { list -> list.map { it.toDomain() } }
+ 
+     override suspend fun insertToDo(topicId: Long, description: String, timestamp: Long): Long =
+         todoDao.insertToDo(ToDoEntity(topicId = topicId, description = description, createdAt = timestamp))
+ 
+     override suspend fun updateToDoStatus(id: Long, isCompleted: Boolean) =
+         todoDao.updateToDoStatus(id, isCompleted)
++
++    // ── Mapping functions ─────────────────────────────────────────────────
++
++    private fun ThoughtEntryEntity.toDomain() = ThoughtEntry(
++        id = id,
++        topicId = topicId,
++        rawText = rawText,
++        treeJson = treeJson,
++        createdAt = createdAt
++    )
++
++    private fun ThoughtAnalysisEntity.toDomain() = ThoughtAnalysis(
++        id = id,
++        entryId = entryId,
++        analysisJson = analysisJson,
++        createdAt = createdAt
++    )
++
++    private fun ConversationTopicEntity.toDomain() = ConversationTopic(
++        id = id,
++        title = title,
++        isResolved = isResolved,
++        resolutionResult = resolutionResult,
++        createdAt = createdAt,
++        updatedAt = updatedAt
++    )
++
++    private fun ToDoEntity.toDomain() = ToDo(
++        id = id,
++        topicId = topicId,
++        description = description,
++        isCompleted = isCompleted,
++        resultNotes = resultNotes,
++        createdAt = createdAt
++    )
+ }
+diff --git a/app/src/main/java/com/example/recemotion/data/serialization/ThoughtStructureJsonAdapter.kt b/app/src/main/java/com/example/recemotion/data/serialization/ThoughtStructureJsonAdapter.kt
+index 375e8e3..9860eb5 100644
+--- a/app/src/main/java/com/example/recemotion/data/serialization/ThoughtStructureJsonAdapter.kt
++++ b/app/src/main/java/com/example/recemotion/data/serialization/ThoughtStructureJsonAdapter.kt
+@@ -2,21 +2,29 @@ package com.example.recemotion.data.serialization
+ 
+ import com.example.recemotion.domain.model.ThoughtNode
+ import com.example.recemotion.domain.model.ThoughtStructure
++import com.example.recemotion.domain.service.IThoughtStructureSerializer
+ import org.json.JSONArray
+ import org.json.JSONObject
+ import javax.inject.Inject
+ 
+ /**
+- * Serializes ThoughtStructure to JSON for storage.
++ * Serializes and deserializes ThoughtStructure to/from JSON for storage.
+  */
+-class ThoughtStructureJsonAdapter @Inject constructor() {
++class ThoughtStructureJsonAdapter @Inject constructor() : IThoughtStructureSerializer {
+ 
+-    fun toJson(structure: ThoughtStructure): String {
++    override fun toJson(structure: ThoughtStructure): String {
+         val root = JSONObject()
+         root.put("roots", nodesToJson(structure.roots))
+         return root.toString()
+     }
+ 
++    override fun fromJson(json: String): ThoughtStructure {
++        if (json.isBlank() || json == "{}") return ThoughtStructure()
++        val root = JSONObject(json)
++        val roots = nodesFromJson(root.optJSONArray("roots") ?: JSONArray())
++        return ThoughtStructure(roots)
++    }
++
+     private fun nodesToJson(nodes: List<ThoughtNode>): JSONArray {
+         val array = JSONArray()
+         for (node in nodes) {
+@@ -28,4 +36,19 @@ class ThoughtStructureJsonAdapter @Inject constructor() {
+         }
+         return array
+     }
++
++    private fun nodesFromJson(array: JSONArray): List<ThoughtNode> {
++        val result = mutableListOf<ThoughtNode>()
++        for (i in 0 until array.length()) {
++            val obj = array.optJSONObject(i) ?: continue
++            result.add(
++                ThoughtNode(
++                    id = obj.optString("id", i.toString()),
++                    text = obj.optString("text", ""),
++                    children = nodesFromJson(obj.optJSONArray("children") ?: JSONArray())
++                )
++            )
++        }
++        return result
++    }
+ }
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/BiasDetection.kt b/app/src/main/java/com/example/recemotion/domain/model/BiasDetection.kt
+index 0a2dbe9..cec9ccb 100644
+--- a/app/src/main/java/com/example/recemotion/domain/model/BiasDetection.kt
++++ b/app/src/main/java/com/example/recemotion/domain/model/BiasDetection.kt
+@@ -1,13 +1,9 @@
+ package com.example.recemotion.domain.model
+ 
+-import android.os.Parcelable
+-import kotlinx.parcelize.Parcelize
+-
+ /**
+  * Detected cognitive bias in the thought content.
+  */
+-@Parcelize
+ data class BiasDetection(
+     val name: String,
+     val evidence: String
+-) : Parcelable
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ConversationTopic.kt b/app/src/main/java/com/example/recemotion/domain/model/ConversationTopic.kt
+new file mode 100644
+index 0000000..7d3d01d
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/ConversationTopic.kt
+@@ -0,0 +1,10 @@
++package com.example.recemotion.domain.model
++
++data class ConversationTopic(
++    val id: Long,
++    val title: String,
++    val isResolved: Boolean,
++    val resolutionResult: String?,
++    val createdAt: Long,
++    val updatedAt: Long
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ConversationUpdateEvent.kt b/app/src/main/java/com/example/recemotion/domain/model/ConversationUpdateEvent.kt
+new file mode 100644
+index 0000000..62d40c3
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/ConversationUpdateEvent.kt
+@@ -0,0 +1,7 @@
++package com.example.recemotion.domain.model
++
++sealed class ConversationUpdateEvent {
++    data class Analyzing(val message: String) : ConversationUpdateEvent()
++    data class Done(val topicId: Long, val isNewTopic: Boolean, val entryId: Long) : ConversationUpdateEvent()
++    data class Error(val message: String) : ConversationUpdateEvent()
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/EmotionEntry.kt b/app/src/main/java/com/example/recemotion/domain/model/EmotionEntry.kt
+new file mode 100644
+index 0000000..800ec21
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/EmotionEntry.kt
+@@ -0,0 +1,11 @@
++package com.example.recemotion.domain.model
++
++data class EmotionEntry(
++    val id: Long,
++    val timestamp: Long,
++    val emotion: String,
++    val stressLevel: Int,
++    val energyLevel: Int,
++    val sessionDate: String,
++    val trigger: String
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/LogicalFlowModels.kt b/app/src/main/java/com/example/recemotion/domain/model/LogicalFlowModels.kt
+index 581bedd..1be5161 100644
+--- a/app/src/main/java/com/example/recemotion/domain/model/LogicalFlowModels.kt
++++ b/app/src/main/java/com/example/recemotion/domain/model/LogicalFlowModels.kt
+@@ -115,8 +115,7 @@ data class Misalignment(
+ 
+ data class LogicalFlowAnalysis(
+     val sentences: List<AnalyzedSentence>,
+-    val relations: List<LogicalRelation>,
+-    val overallFlow: List<String>
++    val relations: List<LogicalRelation>
+ )
+ 
+ // ─── 最終レポート（Phase 5） ─────────────────────────────────────
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/MissingPerspective.kt b/app/src/main/java/com/example/recemotion/domain/model/MissingPerspective.kt
+index 0592799..6027a0b 100644
+--- a/app/src/main/java/com/example/recemotion/domain/model/MissingPerspective.kt
++++ b/app/src/main/java/com/example/recemotion/domain/model/MissingPerspective.kt
+@@ -1,12 +1,8 @@
+ package com.example.recemotion.domain.model
+ 
+-import android.os.Parcelable
+-import kotlinx.parcelize.Parcelize
+-
+ /**
+  * A perspective that is missing from the thought content.
+  */
+-@Parcelize
+ data class MissingPerspective(
+     val description: String
+-) : Parcelable
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysis.kt b/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysis.kt
+new file mode 100644
+index 0000000..6c3526c
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysis.kt
+@@ -0,0 +1,8 @@
++package com.example.recemotion.domain.model
++
++data class ThoughtAnalysis(
++    val id: Long,
++    val entryId: Long,
++    val analysisJson: String,
++    val createdAt: Long
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysisResult.kt b/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysisResult.kt
+index b308cd1..98a6413 100644
+--- a/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysisResult.kt
++++ b/app/src/main/java/com/example/recemotion/domain/model/ThoughtAnalysisResult.kt
+@@ -1,12 +1,8 @@
+ package com.example.recemotion.domain.model
+ 
+-import android.os.Parcelable
+-import kotlinx.parcelize.Parcelize
+-
+ /**
+  * Final structured analysis from the LLM.
+  */
+-@Parcelize
+ data class ThoughtAnalysisResult(
+     val premises: List<String> = emptyList(),
+     val emotions: List<String> = emptyList(),
+@@ -15,11 +11,10 @@ data class ThoughtAnalysisResult(
+     val assumptions: List<Assumption> = emptyList(),
+     val possibleBiases: List<BiasDetection> = emptyList(),
+     val missingPerspectives: List<MissingPerspective> = emptyList()
+-) : Parcelable
++)
+ 
+-@Parcelize
+ data class Assumption(
+     val text: String,
+     val importance: Int,
+     val verificationGoal: String
+-) : Parcelable
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ThoughtEntry.kt b/app/src/main/java/com/example/recemotion/domain/model/ThoughtEntry.kt
+new file mode 100644
+index 0000000..72bbcee
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/ThoughtEntry.kt
+@@ -0,0 +1,9 @@
++package com.example.recemotion.domain.model
++
++data class ThoughtEntry(
++    val id: Long,
++    val topicId: Long?,
++    val rawText: String,
++    val treeJson: String,
++    val createdAt: Long
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/model/ToDo.kt b/app/src/main/java/com/example/recemotion/domain/model/ToDo.kt
+new file mode 100644
+index 0000000..9dcf1da
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/model/ToDo.kt
+@@ -0,0 +1,10 @@
++package com.example.recemotion.domain.model
++
++data class ToDo(
++    val id: Long,
++    val topicId: Long,
++    val description: String,
++    val isCompleted: Boolean,
++    val resultNotes: String?,
++    val createdAt: Long
++)
+diff --git a/app/src/main/java/com/example/recemotion/domain/repository/EmotionRepository.kt b/app/src/main/java/com/example/recemotion/domain/repository/EmotionRepository.kt
+new file mode 100644
+index 0000000..72e53d9
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/repository/EmotionRepository.kt
+@@ -0,0 +1,11 @@
++package com.example.recemotion.domain.repository
++
++import com.example.recemotion.domain.model.EmotionEntry
++import kotlinx.coroutines.flow.Flow
++
++interface EmotionRepository {
++    suspend fun insert(emotion: String, stressLevel: Int, energyLevel: Int, sessionDate: String, trigger: String)
++    suspend fun getRecent(limit: Int): List<EmotionEntry>
++    fun getByDate(date: String): Flow<List<EmotionEntry>>
++    suspend fun getAroundTime(startTime: Long, endTime: Long): List<EmotionEntry>
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/repository/ThoughtRepository.kt b/app/src/main/java/com/example/recemotion/domain/repository/ThoughtRepository.kt
+index 851a22b..dd08983 100644
+--- a/app/src/main/java/com/example/recemotion/domain/repository/ThoughtRepository.kt
++++ b/app/src/main/java/com/example/recemotion/domain/repository/ThoughtRepository.kt
+@@ -1,9 +1,9 @@
+ package com.example.recemotion.domain.repository
+ 
+-import com.example.recemotion.data.db.ConversationTopicEntity
+-import com.example.recemotion.data.db.ThoughtAnalysisEntity
+-import com.example.recemotion.data.db.ThoughtEntryEntity
+-import com.example.recemotion.data.db.ToDoEntity
++import com.example.recemotion.domain.model.ConversationTopic
++import com.example.recemotion.domain.model.ThoughtAnalysis
++import com.example.recemotion.domain.model.ThoughtEntry
++import com.example.recemotion.domain.model.ToDo
+ import kotlinx.coroutines.flow.Flow
+ 
+ /**
+@@ -18,37 +18,37 @@ interface ThoughtRepository {
+ 
+     suspend fun updateEntry(id: Long, treeJson: String)
+ 
+-    suspend fun getEntryById(id: Long): ThoughtEntryEntity?
++    suspend fun getEntryById(id: Long): ThoughtEntry?
+ 
+-    suspend fun getLatestEntryForTopic(topicId: Long): ThoughtEntryEntity?
++    suspend fun getLatestEntryForTopic(topicId: Long): ThoughtEntry?
+ 
+-    fun getEntriesByTopic(topicId: Long): Flow<List<ThoughtEntryEntity>>
++    fun getEntriesByTopic(topicId: Long): Flow<List<ThoughtEntry>>
+ 
+-    fun getAllEntries(): Flow<List<ThoughtEntryEntity>>
++    fun getAllEntries(): Flow<List<ThoughtEntry>>
+ 
+     // ── Analysis operations ───────────────────────────────────────────────
+ 
+     suspend fun storeAnalysis(entryId: Long, analysisJson: String, timestamp: Long): Long
+ 
+-    suspend fun getAnalysisForEntry(entryId: Long): ThoughtAnalysisEntity?
++    suspend fun getAnalysisForEntry(entryId: Long): ThoughtAnalysis?
+ 
+     // ── Topic operations ──────────────────────────────────────────────────
+ 
+-    suspend fun getActiveTopic(): ConversationTopicEntity?
++    suspend fun getActiveTopic(): ConversationTopic?
+ 
+     suspend fun insertTopic(title: String, timestamp: Long): Long
+ 
+-    suspend fun getTopicById(id: Long): ConversationTopicEntity?
++    suspend fun getTopicById(id: Long): ConversationTopic?
+ 
+     suspend fun updateTopicTimestamp(id: Long, timestamp: Long)
+ 
+     suspend fun resolveTopic(id: Long, result: String, timestamp: Long)
+ 
+-    fun getAllTopics(): Flow<List<ConversationTopicEntity>>
++    fun getAllTopics(): Flow<List<ConversationTopic>>
+ 
+     // ── ToDo operations ───────────────────────────────────────────────────
+ 
+-    fun getAllToDos(): Flow<List<ToDoEntity>>
++    fun getAllToDos(): Flow<List<ToDo>>
+ 
+     suspend fun insertToDo(topicId: Long, description: String, timestamp: Long): Long
+ 
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/IPromptBuilder.kt b/app/src/main/java/com/example/recemotion/domain/service/IPromptBuilder.kt
+new file mode 100644
+index 0000000..e10c4a2
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/service/IPromptBuilder.kt
+@@ -0,0 +1,10 @@
++package com.example.recemotion.domain.service
++
++import com.example.recemotion.domain.model.ThoughtStructure
++
++/**
++ * Domain interface for building LLM prompts from a ThoughtStructure.
++ */
++interface IPromptBuilder {
++    fun build(structure: ThoughtStructure, emotionContext: String? = null): String
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/IResourceChecker.kt b/app/src/main/java/com/example/recemotion/domain/service/IResourceChecker.kt
+new file mode 100644
+index 0000000..14e4989
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/service/IResourceChecker.kt
+@@ -0,0 +1,12 @@
++package com.example.recemotion.domain.service
++
++import java.io.File
++
++/**
++ * Domain interface for checking whether required system resources are installed.
++ */
++interface IResourceChecker {
++    fun isDictionaryInstalled(): Boolean
++    fun isCabochaModelInstalled(): Boolean
++    fun resolveLlmModelFile(): File?
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/IThoughtJsonParser.kt b/app/src/main/java/com/example/recemotion/domain/service/IThoughtJsonParser.kt
+new file mode 100644
+index 0000000..4d1efec
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/service/IThoughtJsonParser.kt
+@@ -0,0 +1,10 @@
++package com.example.recemotion.domain.service
++
++import com.example.recemotion.domain.model.ThoughtAnalysisResult
++
++/**
++ * Domain interface for parsing LLM JSON output into a ThoughtAnalysisResult.
++ */
++interface IThoughtJsonParser {
++    fun parse(jsonText: String): ThoughtAnalysisResult
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureParser.kt b/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureParser.kt
+new file mode 100644
+index 0000000..79ee969
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureParser.kt
+@@ -0,0 +1,11 @@
++package com.example.recemotion.domain.service
++
++import com.example.recemotion.domain.model.ThoughtStructure
++
++/**
++ * Domain interface for parsing raw text into a ThoughtStructure tree.
++ * Abstracts the dependency parser + mapper pipeline from the use case.
++ */
++interface IThoughtStructureParser {
++    suspend fun parse(text: String): ThoughtStructure
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureSerializer.kt b/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureSerializer.kt
+new file mode 100644
+index 0000000..40bcdae
+--- /dev/null
++++ b/app/src/main/java/com/example/recemotion/domain/service/IThoughtStructureSerializer.kt
+@@ -0,0 +1,11 @@
++package com.example.recemotion.domain.service
++
++import com.example.recemotion.domain.model.ThoughtStructure
++
++/**
++ * Domain interface for serializing and deserializing ThoughtStructure to/from JSON.
++ */
++interface IThoughtStructureSerializer {
++    fun toJson(structure: ThoughtStructure): String
++    fun fromJson(json: String): ThoughtStructure
++}
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/LLMInferenceService.kt b/app/src/main/java/com/example/recemotion/domain/service/LLMInferenceService.kt
+index bd4b9b7..63dfeb5 100644
+--- a/app/src/main/java/com/example/recemotion/domain/service/LLMInferenceService.kt
++++ b/app/src/main/java/com/example/recemotion/domain/service/LLMInferenceService.kt
+@@ -3,26 +3,27 @@ package com.example.recemotion.domain.service
+ import com.example.recemotion.domain.model.InferenceProgress
+ import com.example.recemotion.domain.model.LlmStreamEvent
+ import kotlinx.coroutines.flow.Flow
+-import kotlinx.coroutines.flow.SharedFlow
+-import kotlinx.coroutines.flow.StateFlow
+ 
+ /**
+  * Domain interface for LLM inference operations.
+  * Abstracts the concrete LLM implementation from domain/use-case layers.
++ *
++ * Lifecycle management (initModel, close) is handled by the implementation
++ * and Hilt's @Singleton scope — not exposed here.
+  */
+ interface LLMInferenceService {
+ 
+     /** Partial text tokens emitted during generation (for UI display). */
+-    val partialResults: SharedFlow<String>
++    val partialResults: Flow<String>
+ 
+     /** Current inference progress state. */
+-    val progress: StateFlow<InferenceProgress>
++    val progress: Flow<InferenceProgress>
+ 
+-    /** Initializes / reloads the model from storage. */
+-    fun initModel()
+-
+-    /** Returns true if the model is loaded and ready. */
+-    fun isModelInitialized(): Boolean
++    /**
++     * Re-initializes the model from storage.
++     * Call this when a new model file has been installed after the service started.
++     */
++    fun reloadModel()
+ 
+     /**
+      * Generates a free-form response and emits chunks to [partialResults].
+@@ -35,7 +36,4 @@ interface LLMInferenceService {
+      * Suitable for structured coroutine collection in use cases.
+      */
+     fun analyzeThoughtStructure(prompt: String): Flow<LlmStreamEvent>
+-
+-    /** Releases model resources. */
+-    fun close()
+ }
+diff --git a/app/src/main/java/com/example/recemotion/domain/service/TopicChangeService.kt b/app/src/main/java/com/example/recemotion/domain/service/TopicChangeService.kt
+index 682fada..b6785f6 100644
+--- a/app/src/main/java/com/example/recemotion/domain/service/TopicChangeService.kt
++++ b/app/src/main/java/com/example/recemotion/domain/service/TopicChangeService.kt
+@@ -20,4 +20,12 @@ interface TopicChangeService {
+      * Builds a prompt for the LLM to decide whether the topic has changed.
+      */
+     fun buildTopicChangePrompt(currentText: String, previousText: String): String
++
++    /**
++     * Parses the LLM's JSON response into a [TopicChangeResult].
++     * Returns a default result (not a new topic) if parsing fails.
++     */
++    fun parseTopicChangeResponse(llmResponse: String): TopicChangeResult
+ }
++
++data class TopicChangeResult(val isNewTopic: Boolean, val suggestedTitle: String = "New Topic")
+diff --git a/app/src/main/java/com/example/recemotion/domain/usecase/AnalyzeThoughtUseCase.kt b/app/src/main/java/com/example/recemotion/domain/usecase/AnalyzeThoughtUseCase.kt
+index a7694a6..2d7b9a4 100644
+--- a/app/src/main/java/com/example/recemotion/domain/usecase/AnalyzeThoughtUseCase.kt
++++ b/app/src/main/java/com/example/recemotion/domain/usecase/AnalyzeThoughtUseCase.kt
+@@ -1,14 +1,13 @@
+ package com.example.recemotion.domain.usecase
+ 
+-import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
+-import com.example.recemotion.data.llm.ThoughtPromptBuilder
+-import com.example.recemotion.data.parser.CabochaThoughtMapper
+-import com.example.recemotion.data.parser.DependencyParser
+-import com.example.recemotion.data.serialization.ThoughtStructureJsonAdapter
+ import com.example.recemotion.domain.model.AnalysisUpdate
+ import com.example.recemotion.domain.model.LlmStreamEvent
+ import com.example.recemotion.domain.model.ThoughtStructure
+ import com.example.recemotion.domain.repository.ThoughtRepository
++import com.example.recemotion.domain.service.IPromptBuilder
++import com.example.recemotion.domain.service.IThoughtJsonParser
++import com.example.recemotion.domain.service.IThoughtStructureParser
++import com.example.recemotion.domain.service.IThoughtStructureSerializer
+ import com.example.recemotion.domain.service.LLMInferenceService
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.flow.Flow
+@@ -20,16 +19,15 @@ import javax.inject.Inject
+ 
+ /**
+  * Orchestrates the thought structuring analysis flow.
+- * Depends only on domain interfaces and stable data-layer helpers.
++ * Depends only on domain interfaces.
+  */
+ class AnalyzeThoughtUseCase @Inject constructor(
+-    private val parser: DependencyParser,
+-    private val mapper: CabochaThoughtMapper,
+-    private val promptBuilder: ThoughtPromptBuilder,
++    private val structureParser: IThoughtStructureParser,
++    private val promptBuilder: IPromptBuilder,
+     private val llmService: LLMInferenceService,
+-    private val jsonParser: ThoughtAnalysisJsonParser,
++    private val jsonParser: IThoughtJsonParser,
+     private val repository: ThoughtRepository,
+-    private val serializer: ThoughtStructureJsonAdapter
++    private val serializer: IThoughtStructureSerializer
+ ) {
+ 
+     fun execute(text: String, entryId: Long? = null, emotionContext: String? = null): Flow<AnalysisUpdate> = channelFlow {
+@@ -41,8 +39,7 @@ class AnalyzeThoughtUseCase @Inject constructor(
+         send(AnalysisUpdate.Analyzing)
+ 
+         val structure: ThoughtStructure = withContext(Dispatchers.Default) {
+-            val parsed = parser.parse(text)
+-            mapper.map(parsed)
++            structureParser.parse(text)
+         }
+ 
+         send(AnalysisUpdate.Progress(structure, ""))
+diff --git a/app/src/main/java/com/example/recemotion/domain/usecase/ManageConversationUseCase.kt b/app/src/main/java/com/example/recemotion/domain/usecase/ManageConversationUseCase.kt
+index ab4456d..10311b2 100644
+--- a/app/src/main/java/com/example/recemotion/domain/usecase/ManageConversationUseCase.kt
++++ b/app/src/main/java/com/example/recemotion/domain/usecase/ManageConversationUseCase.kt
+@@ -1,6 +1,7 @@
+ package com.example.recemotion.domain.usecase
+ 
+ import android.util.Log
++import com.example.recemotion.domain.model.ConversationUpdateEvent
+ import com.example.recemotion.domain.model.LlmStreamEvent
+ import com.example.recemotion.domain.repository.ThoughtRepository
+ import com.example.recemotion.domain.service.LLMInferenceService
+@@ -9,7 +10,6 @@ import com.example.recemotion.domain.service.TopicChangeService
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.channelFlow
+ import kotlinx.coroutines.flow.first
+-import org.json.JSONObject
+ import javax.inject.Inject
+ 
+ class ManageConversationUseCase @Inject constructor(
+@@ -48,14 +48,10 @@ class ManageConversationUseCase @Inject constructor(
+                 val llmResult = llmService.analyzeThoughtStructure(prompt)
+                     .first { it is LlmStreamEvent.Done } as LlmStreamEvent.Done
+ 
+-                try {
+-                    val json = JSONObject(llmResult.fullText)
+-                    isNewTopic = json.getBoolean("is_new_topic")
+-                    suggestedTitle = json.optString("suggested_title", "New Topic")
+-                    Log.d(TAG, "LLM Topic Decision: $isNewTopic, Title: $suggestedTitle")
+-                } catch (e: Exception) {
+-                    Log.e(TAG, "Failed to parse LLM topic decision", e)
+-                }
++                val topicChangeResult = topicChangeService.parseTopicChangeResponse(llmResult.fullText)
++                isNewTopic = topicChangeResult.isNewTopic
++                suggestedTitle = topicChangeResult.suggestedTitle
++                Log.d(TAG, "LLM Topic Decision: $isNewTopic, Title: $suggestedTitle")
+             }
+         }
+ 
+@@ -79,9 +75,3 @@ class ManageConversationUseCase @Inject constructor(
+         send(ConversationUpdateEvent.Done(finalTopicId, isNewTopic, entryId))
+     }
+ }
+-
+-sealed class ConversationUpdateEvent {
+-    data class Analyzing(val message: String) : ConversationUpdateEvent()
+-    data class Done(val topicId: Long, val isNewTopic: Boolean, val entryId: Long) : ConversationUpdateEvent()
+-    data class Error(val message: String) : ConversationUpdateEvent()
+-}
+diff --git a/app/src/main/java/com/example/recemotion/domain/usecase/SystemDiagnosticUseCase.kt b/app/src/main/java/com/example/recemotion/domain/usecase/SystemDiagnosticUseCase.kt
+index 5f9ccd8..b423b72 100644
+--- a/app/src/main/java/com/example/recemotion/domain/usecase/SystemDiagnosticUseCase.kt
++++ b/app/src/main/java/com/example/recemotion/domain/usecase/SystemDiagnosticUseCase.kt
+@@ -1,35 +1,31 @@
+ package com.example.recemotion.domain.usecase
+ 
+-import android.content.Context
+-import com.example.recemotion.data.parser.CabochaModelManager
+-import com.example.recemotion.data.parser.DictionaryManager
+ import com.example.recemotion.domain.model.DiagnosticMessage
+-import java.io.File
++import com.example.recemotion.domain.service.IResourceChecker
++import javax.inject.Inject
+ 
+-class SystemDiagnosticUseCase @javax.inject.Inject constructor(
+-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
+-    private val dictionaryManager: DictionaryManager,
+-    private val cabochaModelManager: CabochaModelManager
++class SystemDiagnosticUseCase @Inject constructor(
++    private val resourceChecker: IResourceChecker
+ ) {
+     fun runDiagnostic(): List<DiagnosticMessage> {
+         val logs = mutableListOf<DiagnosticMessage>()
+ 
+         // 1. MeCab Dictionary
+-        if (dictionaryManager.isInstalled()) {
++        if (resourceChecker.isDictionaryInstalled()) {
+             logs.add(DiagnosticMessage("✅ MeCab Dictionary: Installed"))
+         } else {
+             logs.add(DiagnosticMessage("❌ MeCab Dictionary: Missing", isError = true))
+         }
+ 
+         // 2. CaboCha Models
+-        if (cabochaModelManager.isInstalled()) {
++        if (resourceChecker.isCabochaModelInstalled()) {
+             logs.add(DiagnosticMessage("✅ CaboCha Models: Installed"))
+         } else {
+             logs.add(DiagnosticMessage("❌ CaboCha Models: Missing", isError = true))
+         }
+ 
+         // 3. MediaPipe LLM Model
+-        val modelFile = resolveModelFile()
++        val modelFile = resourceChecker.resolveLlmModelFile()
+         if (modelFile != null) {
+             val sizeMB = modelFile.length() / (1024 * 1024)
+             logs.add(DiagnosticMessage("✅ MediaPipe LLM: Found (${sizeMB}MB)"))
+@@ -39,18 +35,4 @@ class SystemDiagnosticUseCase @javax.inject.Inject constructor(
+ 
+         return logs
+     }
+-
+-    private fun resolveModelFile(): File? {
+-        val supportedExtensions = listOf("bin", "task")
+-        for (ext in supportedExtensions) {
+-            val f = File(context.filesDir, "model.$ext")
+-            if (f.exists() && f.length() > 0) return f
+-        }
+-        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+-        for (ext in supportedExtensions) {
+-            val f = File(downloadsDir, "model.$ext")
+-            if (f.exists() && f.length() > 0) return f
+-        }
+-        return null
+-    }
+ }
+diff --git a/app/src/main/java/com/example/recemotion/presentation/ThoughtAnalysisViewModel.kt b/app/src/main/java/com/example/recemotion/presentation/ThoughtAnalysisViewModel.kt
+index e9c46e3..e800c12 100644
+--- a/app/src/main/java/com/example/recemotion/presentation/ThoughtAnalysisViewModel.kt
++++ b/app/src/main/java/com/example/recemotion/presentation/ThoughtAnalysisViewModel.kt
+@@ -2,26 +2,26 @@ package com.example.recemotion.presentation
+ 
+ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.viewModelScope
+-import com.example.recemotion.data.db.ConversationTopicEntity
+-import com.example.recemotion.data.db.EmotionTimelineDao
+ import com.example.recemotion.data.llm.ThoughtAnalysisJsonParser
++import com.example.recemotion.domain.repository.EmotionRepository
+ import com.example.recemotion.domain.model.AnalysisUpdate
++import com.example.recemotion.domain.model.ConversationTopic
++import com.example.recemotion.domain.model.ConversationUpdateEvent
+ import com.example.recemotion.domain.model.DiagnosticMessage
+ import com.example.recemotion.domain.model.InferenceProgress
+ import com.example.recemotion.domain.repository.ThoughtRepository
+ import com.example.recemotion.domain.service.LLMInferenceService
+ import com.example.recemotion.domain.usecase.AnalyzeThoughtUseCase
+-import com.example.recemotion.domain.usecase.ConversationUpdateEvent
+ import com.example.recemotion.domain.usecase.ManageConversationUseCase
+ import com.example.recemotion.domain.usecase.SystemDiagnosticUseCase
+ import dagger.hilt.android.lifecycle.HiltViewModel
+ import kotlinx.coroutines.Job
++import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.SharingStarted
+ import java.text.SimpleDateFormat
+ import java.util.Date
+ import java.util.Locale
+-import kotlinx.coroutines.flow.SharedFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asStateFlow
+ import kotlinx.coroutines.flow.combine
+@@ -40,7 +40,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
+     private val diagnosticUseCase: SystemDiagnosticUseCase,
+     private val repository: ThoughtRepository,
+     private val llmService: LLMInferenceService,
+-    private val emotionTimelineDao: EmotionTimelineDao
++    private val emotionRepository: EmotionRepository
+ ) : ViewModel() {
+ 
+     private val _uiState = MutableStateFlow(ThoughtAnalysisUiState())
+@@ -50,17 +50,17 @@ class ThoughtAnalysisViewModel @Inject constructor(
+     val historyItems: StateFlow<List<ConversationDisplayItem>> = _historyItems.asStateFlow()
+ 
+     /** 全トピック一覧 — ナビゲーションドロワーで使用 */
+-    val allTopics: StateFlow<List<ConversationTopicEntity>> = repository.getAllTopics()
++    val allTopics: StateFlow<List<ConversationTopic>> = repository.getAllTopics()
+         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+ 
+     /** スクロール先トピックID — MainActivity から設定、ChatFragment で消費 */
+     val scrollToTopicId = MutableStateFlow<Long?>(null)
+ 
+     /** Partial LLM token stream — forwarded from [LLMInferenceService]. */
+-    val partialResults: SharedFlow<String> = llmService.partialResults
++    val partialResults: Flow<String> = llmService.partialResults
+ 
+     /** LLM inference progress — forwarded from [LLMInferenceService]. */
+-    val progress: StateFlow<InferenceProgress> = llmService.progress
++    val progress: Flow<InferenceProgress> = llmService.progress
+ 
+     private val jsonParser = ThoughtAnalysisJsonParser()
+     private var analyzeJob: Job? = null
+@@ -70,8 +70,8 @@ class ThoughtAnalysisViewModel @Inject constructor(
+         runDiagnostic()
+     }
+ 
+-    /** Initializes the LLM model (delegates to [LLMInferenceService]). */
+-    fun initModel() = llmService.initModel()
++    /** モデルファイルが新たにインストールされた後に呼び出す再初期化 */
++    fun initModel() = llmService.reloadModel()
+ 
+     private fun loadHistory() {
+         viewModelScope.launch {
+@@ -169,7 +169,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
+     /** 直近 5 件の感情タイムラインをプロンプト用テキストに変換する */
+     private suspend fun buildEmotionContext(): String? {
+         return try {
+-            val recent = emotionTimelineDao.getRecent(5)
++            val recent = emotionRepository.getRecent(5)
+             if (recent.isEmpty()) return null
+             val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+             recent.reversed().joinToString("\n") { entry ->
+diff --git a/app/src/main/rust/src/core.rs b/app/src/main/rust/src/core.rs
+index 3e675ac..88e45ed 100644
+--- a/app/src/main/rust/src/core.rs
++++ b/app/src/main/rust/src/core.rs
+@@ -40,23 +40,23 @@ lazy_static! {
+ // --- Face Emotion Analysis Logic ---
+ 
+ pub fn init_session(wake_time: i64) {
+-    let mut state = GLOBAL_STATE.lock().unwrap();
++    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
+     state.wake_time = Some(wake_time);
+     state.calibrator = StatisticalCalibrator::new(); // Reset calibration
+     state.emotion_history.clear();
+     state.current_emotion = "Neutral".to_string();
+-    println!("Rust State: Session initialized with wake_time={}", wake_time);
++    log::info!("Rust: Session initialized with wake_time={}", wake_time);
+ }
+ 
+ pub fn update_stress(level: i32) {
+-    let mut state = GLOBAL_STATE.lock().unwrap();
++    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
+     state.stress_level = level.clamp(1, 5);
+-    println!("Rust State: Stress level updated to {}", state.stress_level);
++    log::info!("Rust: Stress level updated to {}", state.stress_level);
+ }
+ 
+ // Replaces push_emotion_frame
+ pub fn process_face_landmarks(coords: Vec<f32>) {
+-    let mut state = GLOBAL_STATE.lock().unwrap();
++    let mut state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
+     
+     // Convert flat vec to Point3D (r.len() / 3)
+     let num_points = coords.len() / 3;
+@@ -84,7 +84,7 @@ pub fn process_face_landmarks(coords: Vec<f32>) {
+             // Auto-finalize if enough samples (e.g., 30 frames ~ 1 sec)
+             if state.calibrator.samples.len() >= 30 {
+                 state.calibrator.finalize_calibration();
+-                println!("Rust: Calibration finalized!");
++                log::info!("Rust: Calibration finalized!");
+             }
+         } else {
+             // Already calibrated: calculate Z-scores and emotion
+@@ -124,13 +124,13 @@ fn is_head_pose_valid(landmarks: &[Point3D]) -> bool {
+ }
+ 
+ pub fn calculate_energy() -> i32 {
+-    let state = GLOBAL_STATE.lock().unwrap();
++    let state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
+     match state.wake_time {
+         Some(wake) => {
+-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
++            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+             calculate_energy_logic(wake, now)
+         }
+-        None => 3, 
++        None => 3,
+     }
+ }
+ 
+@@ -145,11 +145,12 @@ fn calculate_energy_logic(wake_time: i64, current_time: i64) -> i32 {
+ }
+ 
+ pub fn generate_analysis_json(text_input: String) -> String {
+-    let state = GLOBAL_STATE.lock().unwrap();
+-    
++    let state = GLOBAL_STATE.lock().unwrap_or_else(|p| p.into_inner());
++
++    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+     let energy = match state.wake_time {
+-        Some(w) => calculate_energy_logic(w, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+-        None => 3
++        Some(w) => calculate_energy_logic(w, now_secs as i64),
++        None => 3,
+     };
+ 
+     let emotion_summary = if state.emotion_history.is_empty() {
+@@ -170,7 +171,7 @@ pub fn generate_analysis_json(text_input: String) -> String {
+ 
+     let response = serde_json::json!({
+         "status": "success",
+-        "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
++        "timestamp": now_secs,
+         "context": {
+             "energy_level": energy,
+             "stress_level": state.stress_level,
+diff --git a/app/src/main/rust/src/facs/calibration.rs b/app/src/main/rust/src/facs/calibration.rs
+index 1c3d81e..8fd2bdf 100644
+--- a/app/src/main/rust/src/facs/calibration.rs
++++ b/app/src/main/rust/src/facs/calibration.rs
+@@ -93,7 +93,7 @@ impl StatisticalCalibrator {
+         self.is_calibrated = !self.stats.is_empty();
+         
+         if self.is_calibrated {
+-            println!("Rust: Calibration Finalized. Stats: {:?}", self.stats);
++            log::info!("Rust: Calibration Finalized. {} features computed.", self.stats.len());
+         }
+         
+         self.is_calibrated
+diff --git a/app/src/main/rust/src/lib.rs b/app/src/main/rust/src/lib.rs
+index 590a3e5..c5eac49 100644
+--- a/app/src/main/rust/src/lib.rs
++++ b/app/src/main/rust/src/lib.rs
+@@ -53,10 +53,11 @@ pub extern "system" fn Java_com_example_recemotion_MainActivity_getAnalysisJson(
+         .unwrap_or_else(|_| "Error".to_string());
+     
+     let json_output = core::generate_analysis_json(input_text);
+-    
+-    env.new_string(json_output)
+-        .expect("Couldn't create java string!")
+-        .into_raw()
++
++    match env.new_string(&json_output) {
++        Ok(s) => s.into_raw(),
++        Err(_) => env.new_string("{}").map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut()),
++    }
+ }
+ 
+ #[no_mangle]
+diff --git a/settings-processor/build/kotlin/compileKotlin/cacheable/last-build.bin b/settings-processor/build/kotlin/compileKotlin/cacheable/last-build.bin
+index 645c3c7..2c9661d 100644
+Binary files a/settings-processor/build/kotlin/compileKotlin/cacheable/last-build.bin and b/settings-processor/build/kotlin/compileKotlin/cacheable/last-build.bin differ
+diff --git a/settings-processor/build/kotlin/compileKotlin/local-state/build-history.bin b/settings-processor/build/kotlin/compileKotlin/local-state/build-history.bin
+index a3ed9f9..1694710 100644
+Binary files a/settings-processor/build/kotlin/compileKotlin/local-state/build-history.bin and b/settings-processor/build/kotlin/compileKotlin/local-state/build-history.bin differ
+diff --git a/settings-processor/build/libs/settings-processor.jar b/settings-processor/build/libs/settings-processor.jar
+index c63baa2..ee4ef64 100644
+Binary files a/settings-processor/build/libs/settings-processor.jar and b/settings-processor/build/libs/settings-processor.jar differ

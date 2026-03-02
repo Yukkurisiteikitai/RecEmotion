@@ -55,40 +55,8 @@ class LLMInferenceServiceImpl @Inject constructor(
     }
 
     private fun initModel() {
-        Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
+        Log.d(TAG, "[initModel] starting")
         updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
-
-        val modelFile = resolveModelFile()
-        if (modelFile == null) {
-            Log.e(TAG, "1/5 [initModel] validate_file: NOT FOUND")
-            val msg = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
-            _partialResults.tryEmit(msg)
-            updateProgress(stage = LlmStage.ERROR, message = "Error: model file not found")
-            isInitialized = false
-            return
-        }
-        Log.d(TAG, "1/5 [initModel] validate_file: found → ${modelFile.absolutePath}")
-
-        val fileSizeGB = modelFile.length().toDouble() / (1024 * 1024 * 1024)
-        if (fileSizeGB > 5.0) {
-            Log.w(TAG, "2/5 [initModel] size_check: TOO LARGE (${fileSizeGB}GB)")
-            _partialResults.tryEmit("Error: Model file is invalid or corrupted (too large).")
-            updateProgress(stage = LlmStage.ERROR, message = "Error: invalid model file")
-            isInitialized = false
-            return
-        }
-
-        // Validate file format before passing to native MediaPipe to prevent process abort.
-        // .task files must be ZIP archives (magic PK\x03\x04).
-        // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
-        val formatError = checkModelFileFormat(modelFile)
-        if (formatError != null) {
-            Log.e(TAG, "2/5 [initModel] format_check: $formatError")
-            _partialResults.tryEmit("Error: $formatError")
-            updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
-            isInitialized = false
-            return
-        }
 
         initJob?.cancel()
         try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
@@ -96,6 +64,39 @@ class LLMInferenceServiceImpl @Inject constructor(
         isInitialized = false
 
         initJob = helperScope.launch {
+            Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
+            val modelFile = resolveModelFile()
+            if (modelFile == null) {
+                Log.e(TAG, "1/5 [initModel] validate_file: NOT FOUND")
+                val msg = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
+                _partialResults.tryEmit(msg)
+                updateProgress(stage = LlmStage.ERROR, message = "Error: model file not found")
+                isInitialized = false
+                return@launch
+            }
+            Log.d(TAG, "1/5 [initModel] validate_file: found → ${modelFile.absolutePath}")
+
+            val fileSizeGB = modelFile.length().toDouble() / (1024 * 1024 * 1024)
+            if (fileSizeGB > 5.0) {
+                Log.w(TAG, "2/5 [initModel] size_check: TOO LARGE (${fileSizeGB}GB)")
+                _partialResults.tryEmit("Error: Model file is invalid or corrupted (too large).")
+                updateProgress(stage = LlmStage.ERROR, message = "Error: invalid model file")
+                isInitialized = false
+                return@launch
+            }
+
+            // Validate file format before passing to native MediaPipe to prevent process abort.
+            // .task files must be ZIP archives (magic PK\x03\x04).
+            // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
+            val formatError = checkModelFileFormat(modelFile)
+            if (formatError != null) {
+                Log.e(TAG, "2/5 [initModel] format_check: $formatError")
+                _partialResults.tryEmit("Error: $formatError")
+                updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
+                isInitialized = false
+                return@launch
+            }
+
             try {
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)

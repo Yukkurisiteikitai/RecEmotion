@@ -27,18 +27,18 @@ class LogicalFlowAnalyzerImpl @Inject constructor(
         private const val TAG = "LogicalFlowAnalyzerImpl"
     }
 
-    /** Optional native parser; can be set after async initialization. */
-    internal var nativeParser: NativeCabochaParser? = null
+    override suspend fun analyze(text: String): LogicalFlowAnalysis = analyze(text, null)
 
-    override suspend fun analyze(text: String): LogicalFlowAnalysis = withContext(Dispatchers.Default) {
-        val rawSentences = sentenceTokenizer.split(text)
-        Log.d(TAG, "Split into ${rawSentences.size} sentences (parser=${if (nativeParser != null) "CaboCha" else "Kuromoji"})")
+    suspend fun analyze(text: String, nativeParser: NativeCabochaParser?): LogicalFlowAnalysis =
+        withContext(Dispatchers.Default) {
+            val rawSentences = sentenceTokenizer.split(text)
+            Log.d(TAG, "Split into ${rawSentences.size} sentences (parser=${if (nativeParser != null) "CaboCha" else "Kuromoji"})")
 
-        val analyzed = rawSentences.mapIndexed { idx, s ->
-            morphemeAnalyzer.analyze(idx, s, nativeParser)
+            val analyzed = rawSentences.mapIndexed { idx, s ->
+                morphemeAnalyzer.analyze(idx, s, nativeParser)
+            }
+            val relations = relationDetector.detect(analyzed, rawSentences)
+
+            LogicalFlowAnalysis(analyzed, relations)
         }
-        val relations = relationDetector.detect(analyzed, rawSentences)
-
-        LogicalFlowAnalysis(analyzed, relations)
-    }
 }

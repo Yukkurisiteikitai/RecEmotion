@@ -34,7 +34,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "recemotion.db"
                 )
-                    // TODO: Add explicit migrations when bumping DB version to prevent data loss
+                    .fallbackToDestructiveMigration()
+                    // TODO: Replace with explicit migrations before production release
                     .build()
                     .also { INSTANCE = it }
             }

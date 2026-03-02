@@ -64,7 +64,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
     private var _binding: FragmentMainScreenBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var faceLandmarkerHelper: FaceLandmarkerHelper
+    private var faceLandmarkerHelper: FaceLandmarkerHelper? = null
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var modelDownloadHelper: ModelDownloadHelper
     private val thoughtAnalysisViewModel: ThoughtAnalysisViewModel by viewModels()
@@ -125,7 +125,17 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         super.onViewCreated(view, savedInstanceState)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
-        faceLandmarkerHelper = FaceLandmarkerHelper(context = requireContext(), faceLandmarkerHelperListener = this)
+        // FaceLandmarker.createFromOptions() is a heavy I/O operation that blocks the calling thread.
+        // Submit to cameraExecutor (single-thread FIFO) so it completes before any frame analysis tasks.
+        val appContext = requireContext().applicationContext
+        cameraExecutor.execute {
+            try {
+                faceLandmarkerHelper = FaceLandmarkerHelper(context = appContext, faceLandmarkerHelperListener = this)
+            } catch (e: Exception) {
+                Log.e(TAG, "FaceLandmarkerHelper init failed", e)
+                view?.post { onError("FaceLandmarker init failed: ${e.message ?: "unknown"}") }
+            }
+        }
         modelDownloadHelper = ModelDownloadHelper(requireContext())
         conversationAdapter = ConversationAdapter(
             onGenerateToDo = { item -> thoughtAnalysisViewModel.generateToDo(item) },
@@ -186,8 +196,9 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // Submit cleanup to executor before shutdown so it runs after any in-flight init/frame tasks.
+        cameraExecutor.execute { faceLandmarkerHelper?.clearFaceLandmarker() }
         cameraExecutor.shutdown()
-        faceLandmarkerHelper.clearFaceLandmarker()
         _binding = null
     }
 
@@ -314,7 +325,12 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor) { imageProxy ->
-                        faceLandmarkerHelper.detectLiveStream(imageProxy, isFrontCamera = true)
+                        val helper = faceLandmarkerHelper
+                        if (helper != null) {
+                            helper.detectLiveStream(imageProxy, isFrontCamera = true)
+                        } else {
+                            Log.v(TAG, "FaceLandmarkerHelper not ready, skipping frame")
+                        }
                         imageProxy.close()
                     }
                 }
@@ -667,8 +683,7 @@ class MainScreenFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // ── Phase 1 & 2: 解析（nativeParser が有効なら CaboCha、なければ Kuromoji）──
-                flowAnalyzerImpl.nativeParser = nativeParser
-                val analysis = flowAnalyzerImpl.analyze(text)
+                val analysis = flowAnalyzerImpl.analyze(text, nativeParser)
                 val reportBuilder = LogicalFlowReportBuilder()
 
                 binding.progressContainer.visibility = View.GONE
