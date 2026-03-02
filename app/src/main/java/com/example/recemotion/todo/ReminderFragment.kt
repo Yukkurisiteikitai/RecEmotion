@@ -3,6 +3,7 @@ package com.example.recemotion.todo
 import android.Manifest
 import android.app.AlertDialog
 import android.app.AlarmManager
+import android.util.Log
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,8 +25,14 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class ReminderFragment : Fragment() {
 
+    private var isPermissionDialogShowing = false
+
     private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Log.d(TAG, "POST_NOTIFICATIONS permission denied")
+            }
+        }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -56,7 +63,8 @@ class ReminderFragment : Fragment() {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val am = requireContext().getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            if (!am.canScheduleExactAlarms()) {
+            if (!am.canScheduleExactAlarms() && !isPermissionDialogShowing) {
+                isPermissionDialogShowing = true
                 AlertDialog.Builder(requireContext())
                     .setTitle("正確なアラームの許可が必要です")
                     .setMessage("リマインダーを指定した時刻に通知するには、正確なアラームの許可が必要です。設定から許可してください。")
@@ -66,6 +74,7 @@ class ReminderFragment : Fragment() {
                         })
                     }
                     .setNegativeButton("あとで", null)
+                    .setOnDismissListener { isPermissionDialogShowing = false }
                     .show()
             }
         }

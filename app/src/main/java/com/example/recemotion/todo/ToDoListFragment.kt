@@ -39,8 +39,14 @@ class ToDoListFragment : Fragment() {
 
     private val viewModel: ThoughtAnalysisViewModel by activityViewModels()
 
+    private var isPermissionDialogShowing = false
+
     private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                android.util.Log.d(TAG, "POST_NOTIFICATIONS permission denied")
+            }
+        }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -81,7 +87,8 @@ class ToDoListFragment : Fragment() {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val am = requireContext().getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            if (!am.canScheduleExactAlarms()) {
+            if (!am.canScheduleExactAlarms() && !isPermissionDialogShowing) {
+                isPermissionDialogShowing = true
                 AlertDialog.Builder(requireContext())
                     .setTitle("正確なアラームの許可が必要です")
                     .setMessage("リマインダーを指定した時刻に通知するには、正確なアラームの許可が必要です。設定から許可してください。")
@@ -91,6 +98,7 @@ class ToDoListFragment : Fragment() {
                         })
                     }
                     .setNegativeButton("あとで", null)
+                    .setOnDismissListener { isPermissionDialogShowing = false }
                     .show()
             }
         }

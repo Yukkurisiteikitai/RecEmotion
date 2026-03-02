@@ -288,6 +288,7 @@ class MainActivity : AppCompatActivity() {
          * @param wakeTimeUnix 起床時刻 (Unix時刻)
          * @param priority 優先度: 1=デフォルト初期化, 2=実カリブレーション/ユーザー操作 (デフォルト)
          */
+        @Synchronized
         fun initSessionSafe(wakeTimeUnix: Long, priority: Int = 2) {
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             // 新しい日付: ガード状態をリセット

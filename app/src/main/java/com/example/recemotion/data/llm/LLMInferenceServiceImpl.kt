@@ -22,8 +22,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,7 +39,8 @@ class LLMInferenceServiceImpl @Inject constructor(
     @Volatile private var llmInference: LlmInference? = null
 
     private val helperScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var initJob: Job? = null
+    @Volatile private var initJob: Job? = null
+    private val initLock = Any()
 
     private val _partialResults = MutableSharedFlow<String>(
         replay = 0,
@@ -56,90 +59,98 @@ class LLMInferenceServiceImpl @Inject constructor(
     }
 
     private fun initModel() {
-        if (initJob?.isActive == true) {
-            Log.d(TAG, "[initModel] skipped — load already in progress")
+        synchronized(initLock) {
+            if (initJob?.isActive == true) {
+                Log.d(TAG, "[initModel] skipped — load already in progress")
+                return
+            }
+            Log.d(TAG, "[initModel] starting")
+            updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
+            try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
+            llmInference = null
+            isInitialized = false
+            initJob = helperScope.launch {
+                runInitCoroutine()
+            }
+        }
+    }
+
+    private suspend fun runInitCoroutine() {
+        Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
+        val modelFile = resolveModelFile()
+        if (modelFile == null) {
+            Log.e(TAG, "1/5 [initModel] validate_file: NOT FOUND")
+            val msg = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
+            _partialResults.tryEmit(msg)
+            updateProgress(stage = LlmStage.ERROR, message = "Error: model file not found")
+            isInitialized = false
             return
         }
-        Log.d(TAG, "[initModel] starting")
-        updateProgress(stage = LlmStage.LOADING, current = 0, total = 0, message = "Loading model")
+        Log.d(TAG, "1/5 [initModel] validate_file: found → ${modelFile.absolutePath}")
 
-        try { llmInference?.close() } catch (e: Exception) { Log.e(TAG, "release_old error", e) }
-        llmInference = null
-        isInitialized = false
+        val fileSizeGB = modelFile.length().toDouble() / (1024 * 1024 * 1024)
+        if (fileSizeGB > 5.0) {
+            Log.w(TAG, "2/5 [initModel] size_check: TOO LARGE (${fileSizeGB}GB)")
+            _partialResults.tryEmit("Error: Model file is invalid or corrupted (too large).")
+            updateProgress(stage = LlmStage.ERROR, message = "Error: invalid model file")
+            isInitialized = false
+            return
+        }
 
-        initJob = helperScope.launch {
-            Log.d(TAG, "1/5 [initModel] validate_file: searching for model file")
-            val modelFile = resolveModelFile()
-            if (modelFile == null) {
-                Log.e(TAG, "1/5 [initModel] validate_file: NOT FOUND")
-                val msg = "Error: Model file not found. Place model.bin or model.task in Downloads or app internal storage."
-                _partialResults.tryEmit(msg)
-                updateProgress(stage = LlmStage.ERROR, message = "Error: model file not found")
+        // Validate file format before passing to native MediaPipe to prevent process abort.
+        // .task files must be ZIP archives (magic PK\x03\x04).
+        // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
+        val formatError = checkModelFileFormat(modelFile)
+        if (formatError != null) {
+            Log.e(TAG, "2/5 [initModel] format_check: $formatError")
+            _partialResults.tryEmit("Error: $formatError")
+            updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
+            isInitialized = false
+            return
+        }
+
+        try {
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(modelFile.absolutePath)
+                .setMaxTokens(MAX_TOTAL_TOKENS)
+                .build()
+
+            val inference = LlmInference.createFromOptions(context, options)
+
+            if (!coroutineContext.isActive) { inference?.close(); return }
+
+            if (inference == null) {
+                Log.w(TAG, "4/5 [initModel] model_load: createFromOptions returned null")
+                _partialResults.tryEmit("Error: MediaPipe model init returned null (unsupported format?)")
+                updateProgress(stage = LlmStage.ERROR, message = "Error: model init null")
                 isInitialized = false
-                return@launch
-            }
-            Log.d(TAG, "1/5 [initModel] validate_file: found → ${modelFile.absolutePath}")
-
-            val fileSizeGB = modelFile.length().toDouble() / (1024 * 1024 * 1024)
-            if (fileSizeGB > 5.0) {
-                Log.w(TAG, "2/5 [initModel] size_check: TOO LARGE (${fileSizeGB}GB)")
-                _partialResults.tryEmit("Error: Model file is invalid or corrupted (too large).")
-                updateProgress(stage = LlmStage.ERROR, message = "Error: invalid model file")
-                isInitialized = false
-                return@launch
+                return
             }
 
-            // Validate file format before passing to native MediaPipe to prevent process abort.
-            // .task files must be ZIP archives (magic PK\x03\x04).
-            // .bin files without ZIP header are likely GGUF/HuggingFace and will crash the LiteRT LM runtime.
-            val formatError = checkModelFileFormat(modelFile)
-            if (formatError != null) {
-                Log.e(TAG, "2/5 [initModel] format_check: $formatError")
-                _partialResults.tryEmit("Error: $formatError")
-                updateProgress(stage = LlmStage.ERROR, message = "Error: incompatible model format")
-                isInitialized = false
-                return@launch
-            }
-
-            try {
-                val options = LlmInference.LlmInferenceOptions.builder()
-                    .setModelPath(modelFile.absolutePath)
-                    .setMaxTokens(MAX_TOTAL_TOKENS)
-                    .build()
-
-                val inference = LlmInference.createFromOptions(context, options)
-
-                if (!isActive) { inference?.close(); return@launch }
-
-                if (inference == null) {
-                    Log.w(TAG, "4/5 [initModel] model_load: createFromOptions returned null")
-                    _partialResults.tryEmit("Error: MediaPipe model init returned null (unsupported format?)")
-                    updateProgress(stage = LlmStage.ERROR, message = "Error: model init null")
-                    isInitialized = false
-                    return@launch
-                }
-
-                llmInference = inference
-                isInitialized = true
-                Log.i(TAG, "5/5 [initModel] init_complete: model ready")
-                updateProgress(stage = LlmStage.IDLE, message = "Model ready")
-                _partialResults.tryEmit("MediaPipe LLM model loaded successfully.")
-            } catch (e: Exception) {
-                if (!isActive) return@launch
-                Log.e(TAG, "4/5 [initModel] model_load: FAILED", e)
-                val detail = "${e.javaClass.simpleName}: ${e.message ?: "null"}"
-                Log.e(TAG, "model_load: FAILED detail=$detail", e)
-                _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n$detail")
-                updateProgress(stage = LlmStage.ERROR, message = "Error: failed to initialize model")
-                isInitialized = false
-            }
+            llmInference = inference
+            isInitialized = true
+            Log.i(TAG, "5/5 [initModel] init_complete: model ready")
+            updateProgress(stage = LlmStage.IDLE, message = "Model ready")
+            _partialResults.tryEmit("MediaPipe LLM model loaded successfully.")
+        } catch (e: Exception) {
+            if (!coroutineContext.isActive) return
+            Log.e(TAG, "4/5 [initModel] model_load: FAILED", e)
+            val detail = "${e.javaClass.simpleName}: ${e.message ?: "null"}"
+            Log.e(TAG, "model_load: FAILED detail=$detail", e)
+            _partialResults.tryEmit("Error: Failed to initialize MediaPipe LLM model.\n$detail")
+            updateProgress(stage = LlmStage.ERROR, message = "Error: failed to initialize model")
+            isInitialized = false
         }
     }
 
     override fun reloadModel() {
         Log.d(TAG, "[reloadModel] force-cancelling active initJob before reload")
-        initJob?.cancel()
-        initModel()
+        helperScope.launch {
+            val job = synchronized(initLock) { initJob }
+            job?.cancel()
+            job?.join()
+            initModel()
+        }
     }
 
     private fun isModelInitialized(): Boolean = isInitialized
@@ -295,13 +306,14 @@ class LLMInferenceServiceImpl @Inject constructor(
         total: Long? = null,
         message: String? = null
     ) {
-        val prev = _progress.value
-        _progress.value = InferenceProgress(
-            stage = stage ?: prev.stage,
-            current = current ?: prev.current,
-            total = total?.let { if (it > 0L) it else 0L } ?: prev.total,
-            message = message?.map { ch -> if (ch.code in 32..126) ch else '?' }?.joinToString("") ?: prev.message
-        )
+        _progress.update { prev ->
+            InferenceProgress(
+                stage = stage ?: prev.stage,
+                current = current ?: prev.current,
+                total = total?.let { if (it > 0L) it else 0L } ?: prev.total,
+                message = message?.map { ch -> if (ch.code in 32..126) ch else '?' }?.joinToString("") ?: prev.message
+            )
+        }
     }
 
     /**

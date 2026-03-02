@@ -5,9 +5,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 
 object ReminderScheduler {
 
+    private const val TAG = "ReminderScheduler"
     private const val ACTION = "com.example.recemotion.REMINDER_ALARM"
 
     fun schedule(
@@ -23,11 +25,16 @@ object ReminderScheduler {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             return
         }
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
-            pendingIntent
-        )
+        try {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        } catch (e: SecurityException) {
+            Log.w(TAG, "setExactAndAllowWhileIdle denied, falling back to inexact alarm", e)
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        }
     }
 
     /** テスト用: 5秒後に発火 */
