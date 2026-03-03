@@ -1,1 +1,1 @@
-review en2ja.
+Scrutinize every shitty element of the code as thoroughly as possible, and search high and low for any part that isn't shitty by design.
