@@ -20,6 +20,9 @@ interface LLMInferenceService {
     /** Current inference progress state. */
     val progress: StateFlow<InferenceProgress>
 
+    /** True when the LLM model has been successfully loaded and is ready for inference. */
+    val isModelReady: StateFlow<Boolean>
+
     /**
      * Re-initializes the model from storage.
      * Call this when a new model file has been installed after the service started.

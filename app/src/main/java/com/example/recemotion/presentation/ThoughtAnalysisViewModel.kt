@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.update
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,8 +68,11 @@ class ThoughtAnalysisViewModel @Inject constructor(
     /** LLM inference progress — forwarded from [LLMInferenceService]. */
     val progress: StateFlow<InferenceProgress> = llmService.progress
 
+    /** True when the LLM model is loaded and ready — forwarded from [LLMInferenceService]. */
+    val isModelReady: StateFlow<Boolean> get() = llmService.isModelReady
+
     private val jsonParser = ThoughtAnalysisJsonParser()
-    private var analyzeJob: Job? = null
+    @Volatile private var analyzeJob: Job? = null
 
     init {
         loadHistory()
@@ -136,15 +140,13 @@ class ThoughtAnalysisViewModel @Inject constructor(
                 isError = msg.isError
             )
         }
-        _uiState.value = _uiState.value.copy(
-            systemLogs = _uiState.value.systemLogs + diagnosticLogs
-        )
+        _uiState.update { it.copy(systemLogs = it.systemLogs + diagnosticLogs) }
     }
 
     fun analyze(text: String) {
         analyzeJob?.cancel()
         analyzeJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
+            _uiState.update { it.copy(isAnalyzing = true, error = null) }
 
             // 直近の感情タイムラインを取得してプロンプトコンテキストに付加
             val emotionContext = buildEmotionContext()
@@ -152,19 +154,19 @@ class ThoughtAnalysisViewModel @Inject constructor(
             manageConversationUseCase.processInput(text).collect { event ->
                 when (event) {
                     is ConversationUpdateEvent.Analyzing -> {
-                        _uiState.value = _uiState.value.copy(analyzingMessage = event.message)
+                        _uiState.update { it.copy(analyzingMessage = event.message) }
                     }
                     is ConversationUpdateEvent.Done -> {
                         val topic = repository.getTopicById(event.topicId)
-                        _uiState.value = _uiState.value.copy(
+                        _uiState.update { it.copy(
                             currentTopicId = event.topicId,
                             isNewTopicDetected = event.isNewTopic,
                             topicTitle = topic?.title
-                        )
+                        ) }
                         startDetailedAnalysis(text, event.entryId, emotionContext)
                     }
                     is ConversationUpdateEvent.Error -> {
-                        _uiState.value = _uiState.value.copy(isAnalyzing = false, error = event.message)
+                        _uiState.update { it.copy(isAnalyzing = false, error = event.message) }
                     }
                 }
             }
@@ -187,30 +189,31 @@ class ThoughtAnalysisViewModel @Inject constructor(
 
     private suspend fun startDetailedAnalysis(text: String, entryId: Long, emotionContext: String? = null) {
         analyzeThoughtUseCase.execute(text, entryId, emotionContext).collect { update ->
-            val preserved = _uiState.value
-            _uiState.value = when (update) {
-                is AnalysisUpdate.Analyzing -> preserved.copy(isAnalyzing = true)
-                is AnalysisUpdate.Progress -> preserved.copy(
-                    isAnalyzing = true,
-                    thoughtTree = update.structure,
-                    partialStreamingText = update.partial
-                )
-                is AnalysisUpdate.Complete -> preserved.copy(
-                    isAnalyzing = false,
-                    thoughtTree = update.structure,
-                    partialStreamingText = update.fullText,
-                    finalResult = update.result
-                )
-                is AnalysisUpdate.Error -> preserved.copy(
-                    isAnalyzing = false,
-                    error = update.message
-                )
+            _uiState.update { prev ->
+                when (update) {
+                    is AnalysisUpdate.Analyzing -> prev.copy(isAnalyzing = true)
+                    is AnalysisUpdate.Progress -> prev.copy(
+                        isAnalyzing = true,
+                        thoughtTree = update.structure,
+                        partialStreamingText = update.partial
+                    )
+                    is AnalysisUpdate.Complete -> prev.copy(
+                        isAnalyzing = false,
+                        thoughtTree = update.structure,
+                        partialStreamingText = update.fullText,
+                        finalResult = update.result
+                    )
+                    is AnalysisUpdate.Error -> prev.copy(
+                        isAnalyzing = false,
+                        error = update.message
+                    )
+                }
             }
         }
     }
 
     fun dismissTopicNotification() {
-        _uiState.value = _uiState.value.copy(isNewTopicDetected = false)
+        _uiState.update { it.copy(isNewTopicDetected = false) }
     }
 
     fun selectTopic(topicId: Long) {
@@ -227,9 +230,7 @@ class ThoughtAnalysisViewModel @Inject constructor(
             message = message,
             isError = isError
         )
-        _uiState.value = _uiState.value.copy(
-            systemLogs = _uiState.value.systemLogs + newLog
-        )
+        _uiState.update { it.copy(systemLogs = it.systemLogs + newLog) }
     }
 
     fun generateToDo(item: ConversationDisplayItem.ThoughtAnalysis) {
