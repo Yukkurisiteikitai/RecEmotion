@@ -152,6 +152,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // ViewPager2
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
+
 }
 
 tasks.register<Exec>("cargoBuild") {
