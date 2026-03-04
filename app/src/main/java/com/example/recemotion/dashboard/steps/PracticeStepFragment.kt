@@ -10,6 +10,7 @@ import androidx.fragment.app.activityViewModels
 import com.example.recemotion.dashboard.WizardStepFragment
 import com.example.recemotion.databinding.FragmentStepPracticeBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.hapticError
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -30,6 +31,7 @@ class PracticeStepFragment : Fragment(), WizardStepFragment {
     override fun validate(): Boolean {
         if (binding.editActualMinutes.text?.toString().orEmpty().trim().toIntOrNull() == null) {
             Toast.makeText(requireContext(), "実際の時間を数字で入力してください", Toast.LENGTH_SHORT).show()
+            binding.root.hapticError()
             return false
         }
         return true

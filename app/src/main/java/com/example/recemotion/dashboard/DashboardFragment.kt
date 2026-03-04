@@ -13,6 +13,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.recemotion.MainActivity
 import com.example.recemotion.databinding.FragmentDashboardBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.feedbackProgress
+import com.example.recemotion.ui.hapticTick
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -23,6 +25,7 @@ class DashboardFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: TaskViewModel by activityViewModels()
+    private var isDoneExpanded = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -34,23 +37,55 @@ class DashboardFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val adapter = TaskAdapter { /* future: open task detail */ }
+        val activeAdapter = TaskAdapter { /* future: open task detail */ }
         binding.recyclerTasks.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerTasks.adapter = adapter
+        binding.recyclerTasks.adapter = activeAdapter
+
+        val doneAdapter = TaskAdapter { /* future: open task detail */ }
+        binding.recyclerDoneTasks.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerDoneTasks.adapter = doneAdapter
 
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.allTasks.collect { tasks ->
-                    adapter.submitList(tasks)
-                    binding.textEmpty.visibility = if (tasks.isEmpty()) View.VISIBLE else View.GONE
+                launch {
+                    viewModel.activeTasks.collect { tasks ->
+                        activeAdapter.submitList(tasks)
+                        binding.textEmpty.visibility = if (tasks.isEmpty()) View.VISIBLE else View.GONE
+                    }
+                }
+                launch {
+                    viewModel.doneTasks.collect { tasks ->
+                        doneAdapter.submitList(tasks)
+                        val hasDone = tasks.isNotEmpty()
+                        binding.sectionDoneHeader.visibility = if (hasDone) View.VISIBLE else View.GONE
+                        binding.textDoneCount.text = "完了済み (${tasks.size}件)"
+                        if (!hasDone) {
+                            binding.recyclerDoneTasks.visibility = View.GONE
+                            isDoneExpanded = false
+                            updateExpandIcon()
+                        }
+                    }
                 }
             }
         }
 
+        binding.sectionDoneHeader.setOnClickListener {
+            it.hapticTick()
+            isDoneExpanded = !isDoneExpanded
+            binding.recyclerDoneTasks.visibility = if (isDoneExpanded) View.VISIBLE else View.GONE
+            updateExpandIcon()
+        }
+
         binding.fabNewTask.setOnClickListener {
+            it.feedbackProgress()
             viewModel.resetWizard()
             (activity as? MainActivity)?.navigateToTaskFlow()
         }
+    }
+
+    private fun updateExpandIcon() {
+        val rotation = if (isDoneExpanded) 180f else 0f
+        binding.iconDoneExpand.rotation = rotation
     }
 
     override fun onDestroyView() {

@@ -10,6 +10,7 @@ import androidx.fragment.app.activityViewModels
 import com.example.recemotion.dashboard.WizardStepFragment
 import com.example.recemotion.databinding.FragmentStepStrategyBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.hapticError
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -33,10 +34,12 @@ class StrategyStepFragment : Fragment(), WizardStepFragment {
         val minutes = binding.editPlannedMinutes.text?.toString().orEmpty().trim()
         if (hypo.isEmpty() || outcome.isEmpty()) {
             Toast.makeText(requireContext(), "仮説と期待成果を入力してください", Toast.LENGTH_SHORT).show()
+            binding.root.hapticError()
             return false
         }
         if (minutes.toIntOrNull() == null) {
             Toast.makeText(requireContext(), "計画時間を数字で入力してください", Toast.LENGTH_SHORT).show()
+            binding.root.hapticError()
             return false
         }
         return true

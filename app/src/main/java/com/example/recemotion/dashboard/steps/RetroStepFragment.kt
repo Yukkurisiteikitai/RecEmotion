@@ -10,6 +10,7 @@ import androidx.fragment.app.activityViewModels
 import com.example.recemotion.dashboard.WizardStepFragment
 import com.example.recemotion.databinding.FragmentStepRetroBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.hapticError
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -30,6 +31,7 @@ class RetroStepFragment : Fragment(), WizardStepFragment {
     override fun validate(): Boolean {
         if (binding.editActualOutcome.text?.toString().orEmpty().isBlank()) {
             Toast.makeText(requireContext(), "実際の成果を入力してください", Toast.LENGTH_SHORT).show()
+            binding.root.hapticError()
             return false
         }
         return true

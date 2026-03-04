@@ -11,6 +11,8 @@ import androidx.fragment.app.activityViewModels
 import com.example.recemotion.dashboard.WizardStepFragment
 import com.example.recemotion.databinding.FragmentStepObservationBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.hapticError
+import com.example.recemotion.ui.hapticTick
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -20,6 +22,7 @@ class ObservationStepFragment : Fragment(), WizardStepFragment {
     private val binding get() = _binding!!
 
     private val viewModel: TaskViewModel by activityViewModels()
+    private var lastSeekFeedbackTime = 0L
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -38,6 +41,13 @@ class ObservationStepFragment : Fragment(), WizardStepFragment {
     private fun valueLabel(label: android.widget.TextView) = object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
             label.text = (progress + 1).toString()
+            if (fromUser) {
+                val now = System.currentTimeMillis()
+                if (now - lastSeekFeedbackTime >= 100L) {
+                    lastSeekFeedbackTime = now
+                    sb?.hapticTick()
+                }
+            }
         }
         override fun onStartTrackingTouch(sb: SeekBar?) {}
         override fun onStopTrackingTouch(sb: SeekBar?) {}
@@ -46,6 +56,7 @@ class ObservationStepFragment : Fragment(), WizardStepFragment {
     override fun validate(): Boolean {
         if (binding.editTitle.text?.toString().orEmpty().isBlank()) {
             Toast.makeText(requireContext(), "タイトルを入力してください", Toast.LENGTH_SHORT).show()
+            binding.editTitle.hapticError()
             return false
         }
         return true

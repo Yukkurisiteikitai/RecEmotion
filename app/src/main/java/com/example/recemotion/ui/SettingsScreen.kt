@@ -14,6 +14,8 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -89,6 +91,7 @@ private fun SettingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -101,7 +104,10 @@ private fun SettingToggleRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = { newValue ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onCheckedChange(newValue)
+            },
             colors = SwitchDefaults.colors(
                 checkedThumbColor   = AccentGreen,
                 checkedTrackColor   = AccentGreen.copy(alpha = 0.4f),

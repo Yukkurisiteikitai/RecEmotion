@@ -31,6 +31,12 @@ class TaskViewModel @Inject constructor(
     val allTasks: StateFlow<List<TaskEntity>> = taskRepo.getAllTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val activeTasks: StateFlow<List<TaskEntity>> = taskRepo.getTasksByStatus("IN_PROGRESS")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val doneTasks: StateFlow<List<TaskEntity>> = taskRepo.getTasksByStatus("DONE")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _wizardTaskId = MutableStateFlow<Long?>(null)
     val wizardTaskId: StateFlow<Long?> = _wizardTaskId.asStateFlow()
 

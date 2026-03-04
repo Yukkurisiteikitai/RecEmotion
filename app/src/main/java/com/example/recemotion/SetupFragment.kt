@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.recemotion.databinding.FragmentSetupBinding
+import com.example.recemotion.ui.hapticTick
 import com.example.recemotion.presentation.CalibrationButtonState
 import com.example.recemotion.presentation.SetupUiState
 import com.example.recemotion.presentation.SetupViewModel
@@ -176,7 +177,8 @@ class SetupFragment : Fragment(), FaceLandmarkerHelper.LandmarkerListener {
             startCalibration()
         }
 
-        binding.checkAutoCalibrate.setOnCheckedChangeListener { _, isChecked ->
+        binding.checkAutoCalibrate.setOnCheckedChangeListener { view, isChecked ->
+            view.hapticTick()
             viewModel.onAutoCalibrateChanged(isChecked)
         }
 

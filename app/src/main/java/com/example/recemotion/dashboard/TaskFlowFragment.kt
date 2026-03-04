@@ -14,6 +14,9 @@ import com.example.recemotion.dashboard.steps.RetroStepFragment
 import com.example.recemotion.dashboard.steps.StrategyStepFragment
 import com.example.recemotion.databinding.FragmentTaskFlowBinding
 import com.example.recemotion.presentation.TaskViewModel
+import com.example.recemotion.ui.feedbackProgress
+import com.example.recemotion.ui.feedbackSuccess
+import com.example.recemotion.ui.hapticTick
 import dagger.hilt.android.AndroidEntryPoint
 
 /** Implemented by each step fragment so TaskFlowFragment can drive validation + save. */
@@ -46,6 +49,7 @@ class TaskFlowFragment : Fragment() {
         updateUI(0)
 
         binding.btnBack.setOnClickListener {
+            it.hapticTick()
             val current = binding.viewPager.currentItem
             if (current == 0) {
                 (activity as? MainActivity)?.navigateToDashboard()
@@ -64,11 +68,13 @@ class TaskFlowFragment : Fragment() {
             if (stepFragment == null || !stepFragment.validate()) return@setOnClickListener
             stepFragment.save()
             if (current < 3) {
+                it.feedbackProgress()
                 val next = current + 1
                 binding.viewPager.currentItem = next
                 updateUI(next)
             } else {
-                (activity as? MainActivity)?.navigateToDashboard()
+                it.feedbackSuccess()
+                it.postDelayed({ (activity as? MainActivity)?.navigateToDashboard() }, 350L)
             }
         }
     }
