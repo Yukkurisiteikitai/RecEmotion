@@ -21,6 +21,8 @@ import com.example.recemotion.databinding.ActivityMainBinding
 import com.example.recemotion.presentation.ThoughtAnalysisViewModel
 import com.example.recemotion.settings.SetupSettingsStore
 import com.example.recemotion.notification.SimpleNotification
+import com.example.recemotion.dashboard.DashboardFragment
+import com.example.recemotion.dashboard.TaskFlowFragment
 import com.example.recemotion.todo.ReminderFragment
 import com.example.recemotion.todo.ToDoListFragment
 import dagger.hilt.android.AndroidEntryPoint
@@ -59,7 +61,7 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: ThoughtAnalysisViewModel by viewModels()
 
-    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS, TODO, REMINDER }
+    private enum class Screen { SETUP, CHAT, MAIN, CALENDAR, SETTINGS, TODO, REMINDER, DASHBOARD, TASK_FLOW }
     private var currentScreen: Screen = Screen.CHAT
 
     // ナビゲーションドロワーのトピック項目管理
@@ -99,6 +101,8 @@ class MainActivity : AppCompatActivity() {
             val settingsFrag = SettingsFragment()
             val toDoFrag = ToDoListFragment()
             val reminderFrag = ReminderFragment()
+            val dashboardFrag = DashboardFragment()
+            val taskFlowFrag = TaskFlowFragment()
 
             val tx = supportFragmentManager.beginTransaction()
                 .add(R.id.fragmentContainer, chatFrag, TAG_CHAT)
@@ -107,11 +111,15 @@ class MainActivity : AppCompatActivity() {
                 .add(R.id.fragmentContainer, settingsFrag, TAG_SETTINGS)
                 .add(R.id.fragmentContainer, toDoFrag, TAG_TODO)
                 .add(R.id.fragmentContainer, reminderFrag, TAG_REMINDER)
+                .add(R.id.fragmentContainer, dashboardFrag, TAG_DASHBOARD)
+                .add(R.id.fragmentContainer, taskFlowFrag, TAG_TASK_FLOW)
                 .hide(mainFrag)
                 .hide(calFrag)
                 .hide(settingsFrag)
                 .hide(toDoFrag)
                 .hide(reminderFrag)
+                .hide(dashboardFrag)
+                .hide(taskFlowFrag)
 
             if (needsSetup) {
                 tx.add(R.id.fragmentContainer, setupFrag, TAG_SETUP)
@@ -192,6 +200,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.menu_settings -> setScreen(Screen.SETTINGS)
                 R.id.menu_todo -> setScreen(Screen.TODO)
                 R.id.menu_reminder -> setScreen(Screen.REMINDER)
+                R.id.menu_dashboard -> setScreen(Screen.DASHBOARD)
             }
             binding.drawerLayout.closeDrawer(GravityCompat.START)
             true
@@ -210,6 +219,8 @@ class MainActivity : AppCompatActivity() {
         val settingsFrag = supportFragmentManager.findFragmentByTag(TAG_SETTINGS) ?: return
         val toDoFrag = supportFragmentManager.findFragmentByTag(TAG_TODO)
         val reminderFrag = supportFragmentManager.findFragmentByTag(TAG_REMINDER)
+        val dashboardFrag = supportFragmentManager.findFragmentByTag(TAG_DASHBOARD)
+        val taskFlowFrag = supportFragmentManager.findFragmentByTag(TAG_TASK_FLOW)
 
         val chatFrag = supportFragmentManager.findFragmentByTag(TAG_CHAT)
 
@@ -220,6 +231,8 @@ class MainActivity : AppCompatActivity() {
             hide(mainFrag); hide(calFrag); hide(settingsFrag)
             toDoFrag?.let { hide(it) }
             reminderFrag?.let { hide(it) }
+            dashboardFrag?.let { hide(it) }
+            taskFlowFrag?.let { hide(it) }
             when (screen) {
                 Screen.SETUP -> setupFrag?.let { show(it) }
                 Screen.CHAT -> chatFrag?.let { show(it) }
@@ -228,8 +241,19 @@ class MainActivity : AppCompatActivity() {
                 Screen.SETTINGS -> show(settingsFrag)
                 Screen.TODO -> toDoFrag?.let { show(it) }
                 Screen.REMINDER -> reminderFrag?.let { show(it) }
+                Screen.DASHBOARD -> dashboardFrag?.let { show(it) }
+                Screen.TASK_FLOW -> taskFlowFrag?.let { show(it) }
             }
         }.commit()
+    }
+
+    fun navigateToTaskFlow() {
+        setScreen(Screen.TASK_FLOW)
+    }
+
+    fun navigateToDashboard() {
+        setScreen(Screen.DASHBOARD)
+        binding.navView.setCheckedItem(R.id.menu_dashboard)
     }
 
     private fun setupSwipeGesture() {
@@ -264,6 +288,8 @@ class MainActivity : AppCompatActivity() {
         private const val TAG_SETTINGS = SettingsFragment.TAG
         private const val TAG_TODO = ToDoListFragment.TAG
         private const val TAG_REMINDER = ReminderFragment.TAG
+        private const val TAG_DASHBOARD = DashboardFragment.TAG
+        private const val TAG_TASK_FLOW = TaskFlowFragment.TAG
 
         // Rust (librecemotion.so) のロード
         init {
