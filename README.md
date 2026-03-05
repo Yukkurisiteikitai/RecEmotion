@@ -56,3 +56,49 @@ LLMモデルはアプリストレージから次の形式で読み込みます�
 - LLMはオンデバイス推論で、ネットワーク通信は不要です。
 - Face Landmarkerはカメラプレビュー中に継続実行されます。
 - 生成中はLLMの進行状況がオーバーレイ表示されます。
+
+# version関連情報
+### 開発環境
+- **Gradle**: 8.13
+- **Android Gradle Plugin (AGP)**: 8.13.2
+- **Kotlin**: 2.0.21
+- **KSP**: 2.0.21-1.0.28
+- **Java**: 11 (source/target compatibility)
+- **Cargo**: 1.88.0 (873a06493 2025-05-10)
+
+### Android SDK
+- **compileSdk**: 35
+- **minSdk**: 26
+- **targetSdk**: 35
+- **NDK**: 29.0.14206865
+- **CMake**: 3.22.1
+- **Target ABI**: arm64-v8a only (16KB page alignment対応)
+
+### 主要ライブラリ
+#### UI & Architecture
+- **Jetpack Compose BOM**: 2024.12.01
+- **Activity Compose**: 1.9.3
+- **Lifecycle Compose**: 2.8.7
+- **Lifecycle Runtime/ViewModel**: 2.7.0
+- **Material**: 1.10.0
+- **AppCompat**: 1.6.1
+- **ViewPager2**: 1.1.0
+
+#### DI & Database
+- **Hilt**: 2.51.1
+- **Room**: 2.6.1
+- **DataStore Preferences**: 1.1.1
+
+#### Camera & ML
+- **CameraX**: 1.3.1
+- **MediaPipe (Vision/GenAI)**: 0.10.+
+- **Kuromoji (形態素解析)**: 0.9.0
+
+#### その他
+- **WorkManager**: 2.9.0
+- **Markwon (Markdown)**: 4.6.2
+
+#### Testing
+- **JUnit**: 4.13.2
+- **AndroidX JUnit**: 1.3.0
+- **Espresso Core**: 3.7.0
