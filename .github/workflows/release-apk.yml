@@ -3,69 +3,68 @@ name: Release APK
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: temurin
+          java-version: 17
+          cache: gradle
 
       - uses: android-actions/setup-android@v3
 
-      - uses: actions/cache@v4
+      - name: Cache Android SDK
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
-            ${{ env.ANDROID_HOME }}/cmake/3.22.1
-          key: android-ndk-cmake-${{ runner.os }}-29.0.14206865
+            ~/.android
+            $ANDROID_HOME
+          key: android-sdk-${{ runner.os }}-34
 
-      - name: Install NDK
+      - name: Install SDK Components
         run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
           sdkmanager "ndk;29.0.14206865"
           sdkmanager "cmake;3.22.1"
 
       - uses: gradle/gradle-build-action@v3
-      
+
       - name: Build Release APK
         run: ./gradlew :app:assembleRelease
-      
+
       - name: Get version name
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
+
       - name: Rename APK
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
              app/build/outputs/apk/release/RecEmotion-${{ steps.get_version.outputs.VERSION }}.apk
-      
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+
+      - uses: softprops/action-gh-release@v1
         with:
           files: app/build/outputs/apk/release/RecEmotion-${{ steps.get_version.outputs.VERSION }}.apk
           body: |
             ## RecEmotion ${{ steps.get_version.outputs.VERSION }}
-            
+
             ### インストール方法
-            1. APKファイルをダウンロード
-            2. Android端末にAPKを転送してインストール
-            3. LLMモデル(model.task or model.bin)を端末のDownloadsフォルダに配置
-            4. アプリを起動してモデルを選択
-            
+            1. APKをダウンロード
+            2. Android端末に転送
+            3. LLMモデル(model.task / model.bin)をDownloadsへ配置
+            4. アプリ起動してモデル選択
+
             ### 要件
-            - Android 8.0 (API 26) 以上
-            - arm64-v8a アーキテクチャ (64bit ARM端末)
+            - Android 8.0+ (API 26)
+            - arm64-v8a
             - 16KB page alignment対応
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
