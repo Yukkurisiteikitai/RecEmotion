@@ -1,10 +1,15 @@
-name: Build APK
+name: Android CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main ]
+
+env:
+  NDK_VERSION: "29.0.14206865"
+  CMAKE_VERSION: "3.22.1"
+  RUST_VERSION: "1.88.0"
 
 jobs:
   build:
@@ -13,39 +18,73 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup JDK
-        uses: actions/setup-java@v4
+      # 障害D: AGP 8.xはJDK17が必須（build.gradleのJava11設定とは別）
+      - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # 障害B: cargo-ndkをインストール
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
 
-      - name: Cache Android SDK
+      - name: Cache cargo-ndk
+        id: cache-cargo-ndk
         uses: actions/cache@v4
         with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: cargo-ndk-3.5-${{ runner.os }}
+
+      - name: Install cargo-ndk
+        if: steps.cache-cargo-ndk.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk --version "^3.5"
+
+      # キャッシュ（Gradle + Cargo）
+      - uses: actions/cache@v4
+        with:
           path: |
-            ~/.android
-            $ANDROID_HOME
-          key: android-sdk-${{ runner.os }}-34
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
-      - name: Install SDK Components
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # 障害E: NDKとCMakeを明示インストール
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-34"
-          sdkmanager "build-tools;34.0.0"
-          sdkmanager "ndk;29.0.14206865"
-          sdkmanager "cmake;3.22.1"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;${{ env.NDK_VERSION }}" \
+            "cmake;${{ env.CMAKE_VERSION }}"
 
-      - uses: gradle/gradle-build-action@v3
+      - name: Set NDK env
+        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
 
+      # 障害F: local.propertiesをCI環境で生成
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" >> local.properties
+
+      # 障害G: gradlewに実行権限を付与
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      # 障害H: KSP+Hilt+Compose向けにメモリ上限を拡張
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug
+        run: ./gradlew assembleDebug
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+          RUSTFLAGS: "-C link-arg=-Wl,-z,max-page-size=16384"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RecEmotion-debug-${{ github.sha }}
+          name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          retention-days: 7
