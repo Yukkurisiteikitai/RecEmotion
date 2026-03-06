@@ -1,0 +1,123 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NDK_VERSION: "29.0.14206865"
+  CMAKE_VERSION: "3.22.1"
+  RUST_VERSION: "1.88.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 障害D: AGP 8.xはJDK17が必須（build.gradleのJava11設定とは別）
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 障害B: cargo-ndkをインストール
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+
+      - name: Cache cargo-ndk
+        id: cache-cargo-ndk
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: cargo-ndk-3.5-${{ runner.os }}
+
+      - name: Install cargo-ndk
+        if: steps.cache-cargo-ndk.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk --version "^3.5"
+
+      # キャッシュ（Gradle + Cargo）
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # 障害E: NDKとCMakeを明示インストール
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;${{ env.NDK_VERSION }}" \
+            "cmake;${{ env.CMAKE_VERSION }}"
+
+      - name: Set NDK env
+        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      # 障害F: local.propertiesをCI環境で生成
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" >> local.properties
+
+      # 障害G: gradlewに実行権限を付与
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      # デバッグ: Native ソースの存在確認
+      - name: Debug - Check native sources
+        run: |
+          echo "=== Checking .gitmodules ==="
+          cat .gitmodules || echo "No .gitmodules file"
+          echo ""
+          echo "=== Checking app/src/main/cpp structure ==="
+          ls -la app/src/main/cpp/ || true
+          echo ""
+          echo "=== Checking cabocha directory ==="
+          ls -la app/src/main/cpp/cabocha/ || true
+          echo ""
+          echo "=== Checking cabocha/src directory ==="
+          ls -la app/src/main/cpp/cabocha/src/ | head -20 || true
+          echo ""
+          echo "=== Checking mecab directory ==="
+          ls -la app/src/main/cpp/mecab/src/ | head -20 || true
+          echo ""
+          echo "=== Checking crfpp directory ==="
+          ls -la app/src/main/cpp/crfpp/ | head -20 || true
+
+      # 障害H: KSP+Hilt+Compose向けにメモリ上限を拡張
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace --info
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+          RUSTFLAGS: "-C link-arg=-Wl,-z,max-page-size=16384"
+      
+      - name: Upload CMake logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-logs
+          path: |
+            app/.cxx/**/build_output.txt
+            app/.cxx/**/cmake_server_log.txt
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7

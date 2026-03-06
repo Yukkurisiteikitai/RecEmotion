@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -128,7 +130,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     // MediaPipe
-    val mediapipeVersion = "0.10.+"
+    val mediapipeVersion = "0.10.14"
     implementation("com.google.mediapipe:tasks-vision:$mediapipeVersion")
     implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
 
@@ -158,15 +160,31 @@ dependencies {
 }
 
 tasks.register<Exec>("cargoBuild") {
-    // Determine the NDK path (this is a simplified approach, ideally read from local.properties)
-    // Failing that, cargo-ndk often finds it if ANDROID_NDK_HOME is set or via simple lookup.
-    // For now, we rely on cargo-ndk's auto-discovery or user setting the env var.
-
     workingDir = file("src/main/rust")
-    environment("ANDROID_NDK_HOME", "/Users/yuuto/Library/Android/sdk/ndk/29.0.14206865")
-    // Add 16KB page alignment for Android 15+ compatibility
+
+    val ndkPath = System.getenv("ANDROID_NDK_HOME")
+        ?: run {
+            val props = Properties()
+            val localProps = rootProject.file("local.properties")
+            if (localProps.exists()) props.load(localProps.inputStream())
+            val sdkDir = props.getProperty("sdk.dir") ?: error("sdk.dir not found")
+            "$sdkDir/ndk/29.0.14206865"
+        }
+
+    val cargoPath = System.getenv("CARGO_HOME")
+        ?.let { "$it/bin/cargo" }
+        ?: "cargo"  // CI環境ではPATH経由で解決
+
+    environment("ANDROID_NDK_HOME", ndkPath)
     environment("RUSTFLAGS", "-C link-arg=-Wl,-z,max-page-size=16384")
-    commandLine("/Users/yuuto/.cargo/bin/cargo", "ndk", "-t", "aarch64-linux-android", "-o", "../jniLibs", "build", "--release")
+
+    commandLine(
+        cargoPath, "ndk",
+        "-t", "aarch64-linux-android",
+        "-o", "../jniLibs",
+        "build", "--release",
+        "--lib"   // 障害C: [lib]のcdylibのみ対象、[[bin]]を除外
+    )
 }
 
 tasks.named("preBuild") {
