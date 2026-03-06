@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -128,7 +130,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     // MediaPipe
-    val mediapipeVersion = "0.10.+"
+    val mediapipeVersion = "0.10.14"
     implementation("com.google.mediapipe:tasks-vision:$mediapipeVersion")
     implementation("com.google.mediapipe:tasks-genai:$mediapipeVersion")
 
@@ -162,7 +164,7 @@ tasks.register<Exec>("cargoBuild") {
 
     val ndkPath = System.getenv("ANDROID_NDK_HOME")
         ?: run {
-            val props = java.util.Properties()
+            val props = Properties()
             val localProps = rootProject.file("local.properties")
             if (localProps.exists()) props.load(localProps.inputStream())
             val sdkDir = props.getProperty("sdk.dir") ?: error("sdk.dir not found")
